@@ -19,29 +19,50 @@ import UpdatePassword from "./components/UpdatePassword";
 
 function App() {
   const [session, setSession] = useState(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
+    const getSession = async () => {
+      const { data } = await supabase.auth.getSession();
       setSession(data.session);
-    });
+      setLoading(false);
+    };
+
+    getSession();
 
     const { data: listener } = supabase.auth.onAuthStateChange(
       (_event, session) => {
         setSession(session);
-      },
+      }
     );
 
     return () => listener.subscription.unsubscribe();
   }, []);
 
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        Checking session...
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen relative pb-16 bg-gray-100">
       <Router>
+        {/* Show Navbar only when logged in */}
         {session && <Navbar />}
 
         <Routes>
-          <Route path="/" element={<LoginPage />} />
+          {/* Login Route */}
+          <Route
+            path="/"
+            element={
+              session ? <Navigate to="/dashboard" replace /> : <LoginPage />
+            }
+          />
 
+          {/* Protected Routes */}
           <Route
             path="/dashboard"
             element={
@@ -117,7 +138,7 @@ function App() {
           <Route path="/forgot-password" element={<ForgotPassword />} />
           <Route path="/update-password" element={<UpdatePassword />} />
 
-          {/* ✅ Catch All Route */}
+          {/* Catch all route */}
           <Route
             path="*"
             element={
@@ -130,6 +151,7 @@ function App() {
           />
         </Routes>
 
+        {/* Show BottomNav only when logged in */}
         {session && <BottomNav />}
       </Router>
     </div>
