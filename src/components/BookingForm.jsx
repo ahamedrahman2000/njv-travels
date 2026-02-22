@@ -1,13 +1,12 @@
 import React, { useState, useEffect } from "react";
 import { supabase } from "../supabaseClient";
-import { useNavigate } from "react-router-dom";
 
 const BookingForm = () => {
-  const navigate = useNavigate();
-
   // State for vehicles and drivers
   const [vehicles, setVehicles] = useState([]);
   const [drivers, setDrivers] = useState([]);
+  const [fromTime, setFromTime] = useState("");
+  const [toTime, setToTime] = useState("");
 
   // Form states
   const [vehicle, setVehicle] = useState("");
@@ -22,23 +21,22 @@ const BookingForm = () => {
 
   const [totalAmount, setTotalAmount] = useState("");
   const [advance, setAdvance] = useState("");
-  const [balance, setBalance] = useState(0); 
+  const [balance, setBalance] = useState(0);
 
   const [loading, setLoading] = useState(false);
-  const total = parseFloat(totalAmount);
-  const adv = parseFloat(advance);
+
   // Fetch vehicles and drivers
   useEffect(() => {
     const fetchData = async () => {
       const { data: vehicleData, error: vehicleError } = await supabase
         .from("vehicles")
         .select("vehicle_name");
-      if (!vehicleError) setVehicles(vehicleData);
+      if (!vehicleError) setVehicles(vehicleData || []);
 
       const { data: driverData, error: driverError } = await supabase
         .from("drivers")
         .select("driver_name");
-      if (!driverError) setDrivers(driverData);
+      if (!driverError) setDrivers(driverData || []);
     };
     fetchData();
   }, []);
@@ -50,87 +48,83 @@ const BookingForm = () => {
     setBalance(total - adv);
   }, [totalAmount, advance]);
 
-  // Reset form
-  const resetForm = () => {
-    setVehicle("");
-    setDriver("");
-    setCustomerName("");
-    setCustomerNumber("");
-    setFromDate("");
-    setToDate("");
-    setDestinationFrom("");
-    setDestinationTo("");
-    setTotalAmount("");
-    setAdvance("");
-    setBalance(0); 
-  };
-
   // Handle save booking
   const handleSave = async () => {
+    // Validate required fields
     if (
       !vehicle ||
       !driver ||
       !customerName ||
       !customerNumber ||
       !fromDate ||
+      !fromTime ||
       !toDate ||
+      !toTime ||
       !destinationFrom ||
       !destinationTo ||
-      isNaN(total) ||
-      isNaN(adv) 
+      isNaN(parseFloat(totalAmount)) ||
+      isNaN(parseFloat(advance))
     ) {
-      alert("Please fill all required fields!");
+      alert("Please fill all required fields correctly.");
       return;
     }
 
     setLoading(true);
 
-    const bookingData = {
-  vehicle,
-  driver,
-  customer_name: customerName,
-  customer_number: customerNumber,
-  from_date: fromDate,
-  to_date: toDate,
-  destination_from: destinationFrom,
-  destination_to: destinationTo,
-  total_amount: parseFloat(totalAmount),
-  advance: parseFloat(advance),
-  balance: parseFloat(balance), 
-};
+    // Combine date + time properly
+    const fromDateTime = `${fromDate}T${fromTime}`; // ISO format YYYY-MM-DDTHH:MM
+    const toDateTime = `${toDate}T${toTime}`;
 
-    try {
-      if (balance === 0) {
-        // Save directly to trips
-        const { error } = await supabase.from("trips").insert([bookingData]);
-        if (error) throw error;
-        alert("Booking saved in Trips successfully!");
-        resetForm();
-        navigate("/trips");
-      } else {
-        // Save to orders for pending balance
-        const { error } = await supabase.from("orders").insert([bookingData]);
-        if (error) throw error;
-        alert("Booking saved in Orders (pending)!");
-        resetForm();
-        navigate("/orders");
-      }
-    } catch (err) {
-      console.error(err);
-      alert("Failed to save booking");
-    } finally {
-      setLoading(false);
+    const { error } = await supabase.from("orders").insert([
+      {
+        customer_name: customerName,
+        customer_number: customerNumber,
+        vehicle,
+        driver,
+        from_date: fromDateTime, // store timestamp
+        to_date: toDateTime, // store timestamp
+        destination_from: destinationFrom,
+        destination_to: destinationTo,
+        total_amount: parseFloat(totalAmount),
+        advance: parseFloat(advance),
+        balance: parseFloat(balance),
+        from_time: fromTime, // optional separate time field
+        to_time: toTime, // optional separate time field
+      },
+    ]);
+
+    setLoading(false);
+
+    if (error) {
+      alert("Failed to save booking: " + error.message);
+      return;
     }
+
+    alert("Booking saved successfully ✅");
+
+    // Reset form
+    setVehicle("");
+    setDriver("");
+    setCustomerName("");
+    setCustomerNumber("");
+    setFromDate("");
+    setToDate("");
+    setFromTime("");
+    setToTime("");
+    setDestinationFrom("");
+    setDestinationTo("");
+    setTotalAmount("");
+    setAdvance("");
+    setBalance(0);
   };
 
   return (
- <div className="min-h-screen bg-gray-100 px-3 py-4 sm:p-6">
+    <div className="min-h-screen bg-gray-100 px-3 py-4 sm:p-6">
+      <h2 className="text-xl sm:text-2xl font-bold text-gray-700 mb-4 text-center">
+        New Booking
+      </h2>
 
-  <h2 className="text-xl sm:text-2xl font-bold text-gray-700 mb-4 text-center">
-    New Booking
-  </h2>
-
-  <div className="max-w-xl mx-auto bg-white p-4 sm:p-6 rounded-xl shadow-md space-y-3">
+      <div className="max-w-xl mx-auto bg-white p-4 sm:p-6 rounded-xl shadow-md space-y-3">
         {/* Customer */}
         <div>
           <label className="block mb-1 font-medium text-gray-600">
@@ -140,6 +134,7 @@ const BookingForm = () => {
             type="text"
             value={customerName}
             onChange={(e) => setCustomerName(e.target.value)}
+            placeholder="Enter customer name"
             className="w-full p-2 text-sm border border-gray-300 rounded-lg focus:ring-1 focus:ring-[#D4AF37]"
           />
         </div>
@@ -152,7 +147,8 @@ const BookingForm = () => {
             type="text"
             value={customerNumber}
             onChange={(e) => setCustomerNumber(e.target.value)}
-          className="w-full p-2 text-sm border border-gray-300 rounded-lg focus:ring-1 focus:ring-[#D4AF37]"
+            placeholder="Enter mobile number"
+            className="w-full p-2 text-sm border border-gray-300 rounded-lg focus:ring-1 focus:ring-[#D4AF37]"
           />
         </div>
 
@@ -165,9 +161,9 @@ const BookingForm = () => {
             <select
               value={vehicle}
               onChange={(e) => setVehicle(e.target.value)}
-             className="w-full p-2 text-sm border border-gray-300 rounded-lg focus:ring-1 focus:ring-[#D4AF37]"
+              className="w-full p-2 text-sm border border-gray-300 rounded-lg focus:ring-1 focus:ring-[#D4AF37]"
             >
-              <option value="">-- Select Vehicle --</option>
+              <option value="">Select Vehicle</option>
               {vehicles.map((v) => (
                 <option key={v.vehicle_name} value={v.vehicle_name}>
                   {v.vehicle_name}
@@ -185,7 +181,7 @@ const BookingForm = () => {
               onChange={(e) => setDriver(e.target.value)}
               className="w-full p-2 text-sm border border-gray-300 rounded-lg focus:ring-1 focus:ring-[#D4AF37]"
             >
-              <option value="">-- Select Driver --</option>
+              <option value="">Select Driver</option>
               {drivers.map((d) => (
                 <option key={d.driver_name} value={d.driver_name}>
                   {d.driver_name}
@@ -195,119 +191,107 @@ const BookingForm = () => {
           </div>
         </div>
 
-        {/* Dates */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        {/* Dates & Times */}
+        <div className="grid grid-cols-2 gap-4">
           <div>
-            <label className="block mb-1 font-medium text-gray-600">
-              From Date *
-            </label>
+            <label>From Date *</label>
             <input
               type="date"
               value={fromDate}
               onChange={(e) => setFromDate(e.target.value)}
-              className="w-full p-2 text-sm border border-gray-300 rounded-lg focus:ring-1 focus:ring-[#D4AF37]"
+              className="w-full border p-2 rounded"
             />
           </div>
           <div>
-            <label className="block mb-1 font-medium text-gray-600">
-              To Date *
-            </label>
+            <label>From Time *</label>
+            <input
+              type="time"
+              value={fromTime}
+              onChange={(e) => setFromTime(e.target.value)}
+              className="w-full border p-2 rounded"
+            />
+          </div>
+          <div>
+            <label>To Date *</label>
             <input
               type="date"
               value={toDate}
               onChange={(e) => setToDate(e.target.value)}
-              className="w-full p-2 text-sm border border-gray-300 rounded-lg focus:ring-1 focus:ring-[#D4AF37]"
+              className="w-full border p-2 rounded"
+            />
+          </div>
+          <div>
+            <label>To Time *</label>
+            <input
+              type="time"
+              value={toTime}
+              onChange={(e) => setToTime(e.target.value)}
+              className="w-full border p-2 rounded"
             />
           </div>
         </div>
 
-        {/* Destination */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        {/* Destinations */}
+        <div className="grid grid-cols-2 gap-4">
           <div>
-            <label className="block mb-1 font-medium text-gray-600">
-              Destination From *
-            </label>
+            <label>Destination From *</label>
             <input
               type="text"
               value={destinationFrom}
               onChange={(e) => setDestinationFrom(e.target.value)}
-              className="w-full p-2 text-sm border border-gray-300 rounded-lg focus:ring-1 focus:ring-[#D4AF37]"
+              className="w-full border p-2 rounded"
             />
           </div>
           <div>
-            <label className="block mb-1 font-medium text-gray-600">
-              Destination To *
-            </label>
+            <label>Destination To *</label>
             <input
               type="text"
               value={destinationTo}
               onChange={(e) => setDestinationTo(e.target.value)}
-              className="w-full p-2 text-sm border border-gray-300 rounded-lg focus:ring-1 focus:ring-[#D4AF37]"
-            />
-          </div>
-        </div>
-        
-        {/* Amounts & KMs */}
-        <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
-          <div>
-            <label className="block mb-1 font-medium text-gray-600">
-              Total Amount *
-            </label>
-            <input
-              type="number"
-              value={totalAmount}
-              onChange={(e) => setTotalAmount(e.target.value)}
-              className="w-full p-2 text-sm border border-gray-300 rounded-lg focus:ring-1 focus:ring-[#D4AF37]"
-            />
-          </div>
-          <div>
-            <label className="block mb-1 font-medium text-gray-600">
-              Advance
-            </label>
-            <input
-              type="number"
-              value={advance}
-              onChange={(e) => setAdvance(e.target.value)}
-              className="w-full p-2 text-sm border border-gray-300 rounded-lg focus:ring-1 focus:ring-[#D4AF37]"
-            />
-          </div>
-          <div>
-            <label className="block mb-1 font-medium text-gray-600">
-              Balance
-            </label>
-            <input
-              type="number"
-              value={balance}
-              readOnly
-             className="w-full p-2 text-sm border border-gray-300 rounded-lg focus:ring-1 focus:ring-[#D4AF37]"
+              className="w-full border p-2 rounded"
             />
           </div>
         </div>
 
-        {/* Buttons */}
-        <div className="flex flex-col sm:flex-row gap-4 justify-between mt-4">
-          <button
-            onClick={handleSave}
-            disabled={loading}
-            className="bg-[#D4AF37] text-white px-6 py-2 rounded font-semibold hover:bg-yellow-500 transition disabled:opacity-50"
-          >
-            {loading ? "Saving..." : "Save"}
-          </button>
-          <button
-            onClick={() => alert("WhatsApp share coming soon!")}
-            className="bg-green-500 text-white px-6 py-2 rounded font-semibold hover:bg-green-600 transition"
-          >
-            Share to WhatsApp
-          </button>
-          {balance > 0 && (
-            <button
-              className="bg-red-500 text-white px-6 py-2 rounded font-semibold cursor-not-allowed"
-              disabled
-            >
-              Pending
-            </button>
-          )}
+        {/* Amounts */}
+
+        <div>
+          <label>Total Amount *</label>
+          <input
+            type="number"
+            value={totalAmount}
+            onChange={(e) => setTotalAmount(e.target.value)}
+            className="w-full border p-2 rounded"
+          />
         </div>
+        <div>
+          <label>Advance</label>
+          <input
+            type="number"
+            value={advance}
+            onChange={(e) => setAdvance(e.target.value)}
+            className="w-full border p-2 rounded"
+          />
+        </div>
+        <div>
+          <label>Balance</label>
+          <input
+            type="number"
+            value={balance}
+            readOnly
+            className="w-full border p-2 rounded bg-gray-100 text-red-600 font-semibold"
+          />
+        </div>
+
+        {/* Buttons */}
+
+        <button
+          onClick={handleSave}
+          disabled={loading}
+          className="bg-[#D4AF37] w-full text-white px-6 py-2 rounded font-semibold"
+        >
+          {loading ? "Saving..." : "Save"}
+        </button>
       </div>
     </div>
   );

@@ -1,4 +1,4 @@
-import   { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { supabase } from "../supabaseClient";
 
 const OrdersPage = () => {
@@ -6,30 +6,50 @@ const OrdersPage = () => {
   const [payment, setPayment] = useState({});
   const [expenses, setExpenses] = useState({});
   const [expandedId, setExpandedId] = useState(null);
+  const [selectedVehicle, setSelectedVehicle] = useState("all");
 
+  // Fetch orders
   const fetchOrders = async () => {
     const { data, error } = await supabase
       .from("orders")
       .select("*")
       .order("id", { ascending: true });
-
-    if (!error) setOrders(data);
+    if (error) console.error(error);
+    else setOrders(data);
   };
 
   useEffect(() => {
     fetchOrders();
   }, []);
 
+  // Unique Vehicles
+  const vehicles = useMemo(
+    () => ["all", ...new Set(orders.map((o) => o.vehicle).filter(Boolean))],
+    [orders],
+  );
+
+  // Filtered Orders
+  const filteredOrders =
+    selectedVehicle === "all"
+      ? orders
+      : orders.filter((o) => o.vehicle === selectedVehicle);
+
+  // Total Pending
+  const totalPending = useMemo(
+    () => filteredOrders.reduce((sum, o) => sum + Number(o.balance || 0), 0),
+    [filteredOrders],
+  );
+
+  // Handle Expense
   const handleExpenseChange = (id, field, value) => {
     setExpenses((prev) => ({
       ...prev,
-      [id]: {
-        ...prev[id],
-        [field]: value === "" ? "" : Number(value),
-      },
+      [id]: { ...prev[id], [field]: value === "" ? "" : Number(value) },
     }));
   };
 
+  // Complete Trip → Move to Trips table including date + time
+  // Inside handleComplete
   const handleComplete = async (order) => {
     const fuel = Number(expenses[order.id]?.fuel || 0);
     const toll = Number(expenses[order.id]?.toll || 0);
@@ -38,115 +58,167 @@ const OrdersPage = () => {
     const kms = Number(expenses[order.id]?.kms || 0);
     const payAmount = Number(payment[order.id] || 0);
 
+    // Validate payment
     if (payAmount !== Number(order.balance)) {
       alert(`You must pay exact pending amount ₹${order.balance}`);
       return;
     }
 
-    const totalExpense = fuel + toll + driverSalary + other;
-    const netProfit = Number(order.total_amount) - totalExpense;
-
-    const { error: insertError } = await supabase.from("trips").insert([
-      {
-        ...order,
-        balance: 0,
-        kms,
-        fuel_expense: fuel,
-        toll_expense: toll,
-        driver_salary: driverSalary,
-        other_expense: other,
-        net_profit: netProfit,
-      },
-    ]);
-
-    if (insertError) {
-      alert("Failed to complete trip");
+    // Validate expenses
+    if (
+      [fuel, toll, driverSalary, other, kms].some((v) => v === "" || isNaN(v))
+    ) {
+      alert("Please fill all expense fields correctly");
       return;
     }
 
-    await supabase.from("orders").delete().eq("id", order.id);
+    const totalExpense = fuel + toll + driverSalary + other;
+    const netProfit = Number(order.total_amount || 0) - totalExpense;
 
-    alert("Trip Completed Successfully ✅");
+    // ✅ Correct date + time handling: combine as string, no JS Date
+    const tripData = {
+      vehicle: order.vehicle,
+      driver: order.driver,
+      customer_name: order.customer_name,
+      customer_number: order.customer_number,
+      from_date: `${order.from_date}T${order.from_time}`, // exact datetime string
+      to_date: `${order.to_date}T${order.to_time}`, // exact datetime string
+      destination_from: order.destination_from,
+      destination_to: order.destination_to,
+      total_amount: order.total_amount,
+      advance: order.advance,
+      balance: 0,
+      kms,
+      fuel_expense: fuel,
+      toll_expense: toll,
+      driver_salary: driverSalary,
+      other_expense: other,
+      net_profit: netProfit,
+    };
 
+    // Insert into trips
+    const { error: insertError } = await supabase
+      .from("trips")
+      .insert([tripData]);
+    if (insertError) {
+      console.error(insertError);
+      alert("Failed to complete trip: " + insertError.message);
+      return;
+    }
+
+    // Delete order after moving
+    const { error: deleteError } = await supabase
+      .from("orders")
+      .delete()
+      .eq("id", order.id);
+    if (deleteError) {
+      console.error(deleteError);
+      alert("Failed to remove order from pending");
+      return;
+    }
+
+    alert("Trip completed successfully ✅");
     setPayment((prev) => ({ ...prev, [order.id]: "" }));
     setExpenses((prev) => ({ ...prev, [order.id]: {} }));
     setExpandedId(null);
-
     fetchOrders();
   };
 
   return (
     <div className="px-3 py-4 sm:p-6 max-w-4xl mx-auto">
-      <h2 className="text-xl  text-center sm:text-2xl font-bold mb-4 text-gray-800">
-        Pending Orders
-      </h2>
-
-      {orders.map((order) => (
-        <div
-          key={order.id}
-          className="bg-white rounded-xl shadow-sm border px-2 py-4 mb-4 transition hover:shadow-md"
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+        <h2 className="flex justify-between text-xl sm:text-2xl font-bold text-gray-800">
+          Pending Orders
+          <span className="font-bold text-red-600">
+            ₹{totalPending.toLocaleString()}
+          </span>
+        </h2>
+        <select
+          value={selectedVehicle}
+          onChange={(e) => setSelectedVehicle(e.target.value)}
+          className="px-3 py-1.5 border rounded-lg text-sm bg-white"
         >
-          {/* Header */}
-          <div className="flex items-center justify-between flex-nowrap">
-            <div className="flex items-center gap-3 min-w-0 flex-1">
-              <div className="flex gap-1">
-                <p className="text-sm font-semibold">{order.id}</p>
-                <p className="text-sm truncate">{order.customer_name}</p>
+          {vehicles.map((v, i) => (
+            <option key={i} value={v}>
+              {v === "all" ? "All Vehicles" : v}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      {filteredOrders.length === 0 && (
+        <p className="text-center text-gray-500 mt-10">
+          No pending orders found.
+        </p>
+      )}
+
+      {filteredOrders.map((order) => {
+        const fuel = expenses[order.id]?.fuel ?? "";
+        const toll = expenses[order.id]?.toll ?? "";
+        const driverSalary = expenses[order.id]?.driverSalary ?? "";
+        const other = expenses[order.id]?.other ?? "";
+        const kms = expenses[order.id]?.kms ?? "";
+        const payAmount = payment[order.id] ?? "";
+
+        const totalExpense =
+          Number(fuel || 0) +
+          Number(toll || 0) +
+          Number(driverSalary || 0) +
+          Number(other || 0);
+        const netProfit = Number(order.total_amount || 0) - totalExpense;
+
+        const allFieldsFilled =
+          fuel !== "" &&
+          toll !== "" &&
+          driverSalary !== "" &&
+          other !== "" &&
+          kms !== "" &&
+          payAmount !== "" &&
+          Number(payAmount) === Number(order.balance);
+
+        return (
+          <div
+            key={order.id}
+            className="bg-white rounded-xl shadow-sm border px-3 py-4 mb-4"
+          >
+            <div className="flex items-center justify-between flex-nowrap">
+              <div className="flex flex-col flex-1 min-w-0">
+                <p className="text-sm font-semibold truncate">
+                  #{order.id} - {order.customer_name}
+                </p>
+                <p className="text-xs flex flex-col sm:text-sm text-gray-500 truncate">
+                  {/* Show from_date + from_time */}
+                  <span>
+                    {order.from_date
+                      ? new Date(order.from_date).toLocaleDateString()
+                      : ""}{" "}
+                    {order.from_time || ""}
+                  </span> 
+                  <span>
+                    {order.to_date
+                      ? new Date(order.to_date).toLocaleDateString()
+                      : ""}{" "}
+                    {order.to_time || ""}
+                  </span>
+                </p>
               </div>
-
-              <span className="text-gray-300">|</span>
-
-              <p className="text-xs sm:text-sm text-gray-500 truncate">
-                {order.destination_from} → {order.destination_to}
-              </p>
+              <div className="flex items-center gap-2 shrink-0">
+                <span className="bg-red-100 text-red-600 px-2 py-1 rounded-full text-xs font-semibold">
+                  ₹{order.balance}
+                </span>
+                <button
+                  onClick={() =>
+                    setExpandedId(expandedId === order.id ? null : order.id)
+                  }
+                  className="text-xs sm:text-sm text-blue-600 font-medium"
+                >
+                  {expandedId === order.id ? "Hide" : "Manage"}
+                </button>
+              </div>
             </div>
 
-            <div className="flex items-center gap-2 shrink-0">
-              <span className="bg-red-100 text-red-600 px-2 py-1 rounded-full text-xs font-semibold">
-                ₹{order.balance}
-              </span>
-
-              <button
-                onClick={() =>
-                  setExpandedId(expandedId === order.id ? null : order.id)
-                }
-                className="text-xs sm:text-sm text-blue-600 font-medium"
-              >
-                {expandedId === order.id ? "Hide" : "Manage"}
-              </button>
-            </div>
-          </div>
-
-          {/* Expanded Section */}
-          {expandedId === order.id && (() => {
-            const fuel = expenses[order.id]?.fuel ?? "";
-            const toll = expenses[order.id]?.toll ?? "";
-            const driverSalary = expenses[order.id]?.driverSalary ?? "";
-            const other = expenses[order.id]?.other ?? "";
-            const kms = expenses[order.id]?.kms ?? "";
-            const payAmount = payment[order.id] ?? "";
-
-            const allFieldsFilled =
-              fuel !== "" &&
-              toll !== "" &&
-              driverSalary !== "" &&
-              other !== "" &&
-              kms !== "" &&
-              payAmount !== "" &&
-              Number(payAmount) === Number(order.balance);
-
-            const totalExpense =
-              Number(fuel || 0) +
-              Number(toll || 0) +
-              Number(driverSalary || 0) +
-              Number(other || 0);
-
-            const netProfit =
-              Number(order.total_amount) - totalExpense;
-
-            return (
-              <div className="mt-4 border-t pt-3 space-y-4 text-sm">
-                {/* KMs */}
+            {expandedId === order.id && (
+              <div className="mt-4 border-t pt-3 space-y-3 text-sm">
                 <input
                   type="number"
                   placeholder="Total KMs"
@@ -157,7 +229,6 @@ const OrdersPage = () => {
                   }
                 />
 
-                {/* Expenses */}
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                   <input
                     type="number"
@@ -168,7 +239,6 @@ const OrdersPage = () => {
                       handleExpenseChange(order.id, "fuel", e.target.value)
                     }
                   />
-
                   <input
                     type="number"
                     placeholder="Toll"
@@ -178,17 +248,19 @@ const OrdersPage = () => {
                       handleExpenseChange(order.id, "toll", e.target.value)
                     }
                   />
-
                   <input
                     type="number"
                     placeholder="Driver Salary"
                     value={driverSalary}
                     className="px-2 py-1.5 border rounded-lg text-sm"
                     onChange={(e) =>
-                      handleExpenseChange(order.id, "driverSalary", e.target.value)
+                      handleExpenseChange(
+                        order.id,
+                        "driverSalary",
+                        e.target.value,
+                      )
                     }
                   />
-
                   <input
                     type="number"
                     placeholder="Other"
@@ -200,22 +272,17 @@ const OrdersPage = () => {
                   />
                 </div>
 
-                {/* Profit Summary */}
                 <div className="flex justify-between bg-gray-50 px-3 py-2 rounded-lg text-xs">
                   <span>
                     Expense: <strong>₹{totalExpense}</strong>
                   </span>
-
                   <span
-                    className={`font-semibold ${
-                      netProfit >= 0 ? "text-green-600" : "text-red-600"
-                    }`}
+                    className={`${netProfit >= 0 ? "text-green-600" : "text-red-600"} font-semibold`}
                   >
                     Profit: ₹{netProfit}
                   </span>
                 </div>
 
-                {/* Payment */}
                 <div className="flex gap-2 items-center">
                   <input
                     type="number"
@@ -229,16 +296,11 @@ const OrdersPage = () => {
                       }))
                     }
                   />
-
                   <button
                     disabled={!allFieldsFilled}
                     onClick={() => handleComplete(order)}
                     className={`px-4 py-1.5 rounded-lg text-sm font-semibold transition
-                      ${
-                        allFieldsFilled
-                          ? "bg-green-600 text-white"
-                          : "bg-gray-300 text-gray-500 cursor-not-allowed"
-                      }`}
+                      ${allFieldsFilled ? "bg-green-600 text-white" : "bg-gray-300 text-gray-500 cursor-not-allowed"}`}
                   >
                     Complete
                   </button>
@@ -246,20 +308,14 @@ const OrdersPage = () => {
 
                 {!allFieldsFilled && (
                   <p className="text-xs text-red-500">
-                    Fill all fields & exact payment.
+                    Fill all fields & exact payment
                   </p>
                 )}
               </div>
-            );
-          })()}
-        </div>
-      ))}
-
-      {orders.length === 0 && (
-        <p className="text-center text-gray-500 mt-10">
-          No pending orders found.
-        </p>
-      )}
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 };
