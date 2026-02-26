@@ -202,6 +202,11 @@ const OrdersPage = () => {
               <div className="flex flex-col flex-1 min-w-0">
                 <p className="text-sm font-semibold truncate">
                   #{order.id} - {order.customer_name}
+                  {order.vehicle && (
+                    <span className="text-xs text-gray-500 font-normal ml-2">
+                      ({order.vehicle})
+                    </span>
+                  )}
                 </p>
                 <p className="text-xs flex flex-col sm:text-sm text-gray-500 truncate">
                   {/* Show from_date + from_time */}
@@ -237,7 +242,7 @@ const OrdersPage = () => {
                   onClick={() => handleDelete(order.id)}
                   className="text-xs sm:text-sm text-red-600 font-medium"
                 >
-                 <AiOutlineDelete size={18} />
+                  <AiOutlineDelete size={18} />
                 </button>
               </div>
             </div>
