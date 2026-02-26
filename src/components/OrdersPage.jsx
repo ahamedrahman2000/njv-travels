@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import { supabase } from "../supabaseClient";
+import { AiOutlineDelete } from "react-icons/ai";
 
 const OrdersPage = () => {
   const [orders, setOrders] = useState([]);
@@ -123,7 +124,23 @@ const OrdersPage = () => {
     setExpandedId(null);
     fetchOrders();
   };
+  const handleDelete = async (orderId) => {
+    const confirmDelete = window.confirm(
+      "Are you sure you want to delete this order?",
+    );
+    if (!confirmDelete) return;
 
+    const { error } = await supabase.from("orders").delete().eq("id", orderId);
+
+    if (error) {
+      console.error(error);
+      alert("Failed to delete order");
+      return;
+    }
+
+    alert("Order deleted successfully ✅");
+    fetchOrders();
+  };
   return (
     <div className="px-3 py-4 sm:p-6 max-w-4xl mx-auto">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
@@ -193,7 +210,7 @@ const OrdersPage = () => {
                       ? new Date(order.from_date).toLocaleDateString()
                       : ""}{" "}
                     {order.from_time || ""}
-                  </span> 
+                  </span>
                   <span>
                     {order.to_date
                       ? new Date(order.to_date).toLocaleDateString()
@@ -206,6 +223,7 @@ const OrdersPage = () => {
                 <span className="bg-red-100 text-red-600 px-2 py-1 rounded-full text-xs font-semibold">
                   ₹{order.balance}
                 </span>
+
                 <button
                   onClick={() =>
                     setExpandedId(expandedId === order.id ? null : order.id)
@@ -213,6 +231,13 @@ const OrdersPage = () => {
                   className="text-xs sm:text-sm text-blue-600 font-medium"
                 >
                   {expandedId === order.id ? "Hide" : "Manage"}
+                </button>
+
+                <button
+                  onClick={() => handleDelete(order.id)}
+                  className="text-xs sm:text-sm text-red-600 font-medium"
+                >
+                 <AiOutlineDelete size={18} />
                 </button>
               </div>
             </div>
