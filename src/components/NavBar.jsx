@@ -64,11 +64,12 @@ const handleLogout = async () => {
               </button>
 
               <button
-                onClick={() => { navigate("/vehicles"); setOpen(false); }}
+                onClick={() => { navigate("/vehicleList"); setOpen(false); }}
                 className="flex items-center gap-2 px-4 py-3 hover:bg-gray-100 w-full text-left"
               >
                 <Truck size={18} /> Vehicles
               </button>
+            
 
               <hr />
 

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import  { useState, useEffect } from "react";
 import { supabase } from "../supabaseClient";
 
 const BookingForm = () => {
@@ -26,21 +26,34 @@ const BookingForm = () => {
   const [loading, setLoading] = useState(false);
 
   // Fetch vehicles and drivers
+  // useEffect(() => {
+  //   const fetchData = async () => {
+  //     const { data: vehicleData, error: vehicleError } = await supabase
+  //       .from("vehicles")
+  //       .select("vehicle_name");
+  //     if (!vehicleError) setVehicles(vehicleData || []);
+
+  //     const { data: driverData, error: driverError } = await supabase
+  //       .from("drivers")
+  //       .select("driver_name");
+  //     if (!driverError) setDrivers(driverData || []);
+  //   };
+  //   fetchData();
+  // }, []);
   useEffect(() => {
     const fetchData = async () => {
       const { data: vehicleData, error: vehicleError } = await supabase
         .from("vehicles")
-        .select("vehicle_name");
+        .select("id, vehicle_name"); // fetch id and name
       if (!vehicleError) setVehicles(vehicleData || []);
 
       const { data: driverData, error: driverError } = await supabase
         .from("drivers")
-        .select("driver_name");
+        .select("id, driver_name"); // fetch id if you have drivers table
       if (!driverError) setDrivers(driverData || []);
     };
     fetchData();
   }, []);
-
   // Auto-calculate balance
   useEffect(() => {
     const total = parseFloat(totalAmount) || 0;
@@ -79,7 +92,7 @@ const BookingForm = () => {
       {
         customer_name: customerName,
         customer_number: customerNumber,
-        vehicle,
+        vehicle_id: parseInt(vehicle),
         driver,
         from_date: fromDateTime, // store timestamp
         to_date: toDateTime, // store timestamp
@@ -144,7 +157,7 @@ const BookingForm = () => {
             Customer Mobile *
           </label>
           <input
-            type="text"
+            type="number"
             value={customerNumber}
             onChange={(e) => setCustomerNumber(e.target.value)}
             placeholder="Enter mobile number"
@@ -153,7 +166,7 @@ const BookingForm = () => {
         </div>
 
         {/* Vehicle & Driver */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-2 gap-4">
           <div>
             <label className="block mb-1 font-medium text-gray-600">
               Select Vehicle *
@@ -165,7 +178,7 @@ const BookingForm = () => {
             >
               <option value="">Select Vehicle</option>
               {vehicles.map((v) => (
-                <option key={v.vehicle_name} value={v.vehicle_name}>
+                <option key={v.id} value={v.id}>
                   {v.vehicle_name}
                 </option>
               ))}
@@ -194,7 +207,7 @@ const BookingForm = () => {
         {/* Dates & Times */}
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <label>From Date *</label>
+            <label className="block mb-1 font-medium text-gray-600">From Date *</label>
             <input
               type="date"
               value={fromDate}
@@ -203,7 +216,7 @@ const BookingForm = () => {
             />
           </div>
           <div>
-            <label>From Time *</label>
+            <label className="block mb-1 font-medium text-gray-600">From Time *</label>
             <input
               type="time"
               value={fromTime}
@@ -212,7 +225,7 @@ const BookingForm = () => {
             />
           </div>
           <div>
-            <label>To Date *</label>
+            <label className="block mb-1 font-medium text-gray-600">To Date *</label>
             <input
               type="date"
               value={toDate}
@@ -221,7 +234,7 @@ const BookingForm = () => {
             />
           </div>
           <div>
-            <label>To Time *</label>
+            <label className="block mb-1 font-medium text-gray-600">To Time *</label>
             <input
               type="time"
               value={toTime}
@@ -234,47 +247,49 @@ const BookingForm = () => {
         {/* Destinations */}
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <label>Destination From *</label>
+            <label className="block mb-1 font-medium text-gray-600">Destination From *</label>
             <input
               type="text"
               value={destinationFrom}
               onChange={(e) => setDestinationFrom(e.target.value)}
-              className="w-full border p-2 rounded"
+              className="w-full p-2 text-sm border border-gray-300 rounded-lg focus:ring-1 focus:ring-[#D4AF37]"
             />
           </div>
           <div>
-            <label>Destination To *</label>
+            <label className="block mb-1 font-medium text-gray-600">Destination To *</label>
             <input
               type="text"
               value={destinationTo}
               onChange={(e) => setDestinationTo(e.target.value)}
-              className="w-full border p-2 rounded"
+              className="w-full p-2 text-sm border border-gray-300 rounded-lg focus:ring-1 focus:ring-[#D4AF37]"
             />
           </div>
         </div>
 
         {/* Amounts */}
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="block mb-1 font-medium text-gray-600">Total Amount *</label>
+            <input
+              type="number"
+              value={totalAmount}
+              onChange={(e) => setTotalAmount(e.target.value)}
+              className="w-full p-2 text-sm border border-gray-300 rounded-lg focus:ring-1 focus:ring-[#D4AF37]"
+            />
+          </div>
+          <div>
+            <label className="block mb-1 font-medium text-gray-600">Advance</label>
+            <input
+              type="number"
+              value={advance}
+              onChange={(e) => setAdvance(e.target.value)}
+              className="w-full p-2 text-sm border border-gray-300 rounded-lg focus:ring-1 focus:ring-[#D4AF37]"
+            />
+          </div>
+        </div>
 
         <div>
-          <label>Total Amount *</label>
-          <input
-            type="number"
-            value={totalAmount}
-            onChange={(e) => setTotalAmount(e.target.value)}
-            className="w-full border p-2 rounded"
-          />
-        </div>
-        <div>
-          <label>Advance</label>
-          <input
-            type="number"
-            value={advance}
-            onChange={(e) => setAdvance(e.target.value)}
-            className="w-full border p-2 rounded"
-          />
-        </div>
-        <div>
-          <label>Balance</label>
+          <label className="block mb-1 font-bold text-red-600">Balance</label>
           <input
             type="number"
             value={balance}
@@ -288,7 +303,7 @@ const BookingForm = () => {
         <button
           onClick={handleSave}
           disabled={loading}
-          className="bg-[#D4AF37] w-full text-white px-6 py-2 rounded font-semibold"
+          className="bg-green-500 w-full text-white px-6 py-2 rounded font-semibold"
         >
           {loading ? "Saving..." : "Save"}
         </button>

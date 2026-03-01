@@ -1,3 +1,4 @@
+ 
 import { useState, useEffect, useMemo } from "react";
 import { supabase } from "../supabaseClient";
 import { AiOutlineDelete } from "react-icons/ai";
@@ -8,6 +9,22 @@ const OrdersPage = () => {
   const [expenses, setExpenses] = useState({});
   const [expandedId, setExpandedId] = useState(null);
   const [selectedVehicle, setSelectedVehicle] = useState("all");
+  const [vehicleMap, setVehicleMap] = useState({}); // vehicle_id -> vehicle_name
+
+  // Fetch vehicles for mapping
+  useEffect(() => {
+    const fetchVehicles = async () => {
+      const { data, error } = await supabase
+        .from("vehicles")
+        .select("id, vehicle_name");
+      if (!error && data) {
+        const map = {};
+        data.forEach((v) => (map[v.id] = v.vehicle_name));
+        setVehicleMap(map);
+      }
+    };
+    fetchVehicles();
+  }, []);
 
   // Fetch orders
   const fetchOrders = async () => {
@@ -25,7 +42,7 @@ const OrdersPage = () => {
 
   // Unique Vehicles
   const vehicles = useMemo(
-    () => ["all", ...new Set(orders.map((o) => o.vehicle).filter(Boolean))],
+    () => ["all", ...new Set(orders.map((o) => o.vehicle_id).filter(Boolean))],
     [orders],
   );
 
@@ -33,7 +50,7 @@ const OrdersPage = () => {
   const filteredOrders =
     selectedVehicle === "all"
       ? orders
-      : orders.filter((o) => o.vehicle === selectedVehicle);
+      : orders.filter((o) => o.vehicle_id === Number(selectedVehicle));
 
   // Total Pending
   const totalPending = useMemo(
@@ -50,7 +67,6 @@ const OrdersPage = () => {
   };
 
   // Complete Trip → Move to Trips table including date + time
-  // Inside handleComplete
   const handleComplete = async (order) => {
     const fuel = Number(expenses[order.id]?.fuel || 0);
     const toll = Number(expenses[order.id]?.toll || 0);
@@ -59,16 +75,12 @@ const OrdersPage = () => {
     const kms = Number(expenses[order.id]?.kms || 0);
     const payAmount = Number(payment[order.id] || 0);
 
-    // Validate payment
     if (payAmount !== Number(order.balance)) {
       alert(`You must pay exact pending amount ₹${order.balance}`);
       return;
     }
 
-    // Validate expenses
-    if (
-      [fuel, toll, driverSalary, other, kms].some((v) => v === "" || isNaN(v))
-    ) {
+    if ([fuel, toll, driverSalary, other, kms].some((v) => isNaN(v))) {
       alert("Please fill all expense fields correctly");
       return;
     }
@@ -76,14 +88,13 @@ const OrdersPage = () => {
     const totalExpense = fuel + toll + driverSalary + other;
     const netProfit = Number(order.total_amount || 0) - totalExpense;
 
-    // ✅ Correct date + time handling: combine as string, no JS Date
     const tripData = {
-      vehicle: order.vehicle,
+      vehicle_id: order.vehicle_id, // use vehicle_id
       driver: order.driver,
       customer_name: order.customer_name,
       customer_number: order.customer_number,
-      from_date: `${order.from_date}T${order.from_time}`, // exact datetime string
-      to_date: `${order.to_date}T${order.to_time}`, // exact datetime string
+      from_date: `${order.from_date}T${order.from_time}`,
+      to_date: `${order.to_date}T${order.to_time}`,
       destination_from: order.destination_from,
       destination_to: order.destination_to,
       total_amount: order.total_amount,
@@ -97,7 +108,7 @@ const OrdersPage = () => {
       net_profit: netProfit,
     };
 
-    // Insert into trips
+    // 1️⃣ Insert trip
     const { error: insertError } = await supabase
       .from("trips")
       .insert([tripData]);
@@ -107,11 +118,39 @@ const OrdersPage = () => {
       return;
     }
 
-    // Delete order after moving
+    // 2️⃣ Fetch vehicle odometer
+    const { data: vehicleData, error: vehicleFetchError } = await supabase
+      .from("vehicles")
+      .select("odometer")
+      .eq("id", order.vehicle_id)
+      .single();
+
+    if (vehicleFetchError) {
+      console.error(vehicleFetchError);
+      alert("Trip saved but failed to fetch vehicle odometer");
+      return;
+    }
+
+    const updatedOdometer = Number(vehicleData.odometer || 0) + kms;
+
+    // 3️⃣ Update vehicle odometer
+    const { error: updateError } = await supabase
+      .from("vehicles")
+      .update({ odometer: updatedOdometer })
+      .eq("id", order.vehicle_id);
+
+    if (updateError) {
+      console.error(updateError);
+      alert("Trip saved but failed to update odometer");
+      return;
+    }
+
+    // 4️⃣ Delete order
     const { error: deleteError } = await supabase
       .from("orders")
       .delete()
       .eq("id", order.id);
+
     if (deleteError) {
       console.error(deleteError);
       alert("Failed to remove order from pending");
@@ -119,11 +158,13 @@ const OrdersPage = () => {
     }
 
     alert("Trip completed successfully ✅");
+
     setPayment((prev) => ({ ...prev, [order.id]: "" }));
     setExpenses((prev) => ({ ...prev, [order.id]: {} }));
     setExpandedId(null);
     fetchOrders();
   };
+
   const handleDelete = async (orderId) => {
     const confirmDelete = window.confirm(
       "Are you sure you want to delete this order?",
@@ -141,6 +182,7 @@ const OrdersPage = () => {
     alert("Order deleted successfully ✅");
     fetchOrders();
   };
+
   return (
     <div className="px-3 py-4 sm:p-6 max-w-4xl mx-auto">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
@@ -153,11 +195,11 @@ const OrdersPage = () => {
         <select
           value={selectedVehicle}
           onChange={(e) => setSelectedVehicle(e.target.value)}
-          className="px-3 py-1.5 border rounded-lg text-sm bg-white"
+          className="px-3 py-3 border rounded-lg text-sm bg-white"
         >
-          {vehicles.map((v, i) => (
-            <option key={i} value={v}>
-              {v === "all" ? "All Vehicles" : v}
+          {vehicles.map((v) => (
+            <option key={v} value={v}>
+              {v === "all" ? "All Vehicles" : vehicleMap[v]}
             </option>
           ))}
         </select>
@@ -202,14 +244,13 @@ const OrdersPage = () => {
               <div className="flex flex-col flex-1 min-w-0">
                 <p className="text-sm font-semibold truncate">
                   #{order.id} - {order.customer_name}
-                  {order.vehicle && (
+                  {order.vehicle_id && (
                     <span className="text-xs text-gray-500 font-normal ml-2">
-                      ({order.vehicle})
+                      ({vehicleMap[order.vehicle_id]})
                     </span>
                   )}
                 </p>
                 <p className="text-xs flex flex-col sm:text-sm text-gray-500 truncate">
-                  {/* Show from_date + from_time */}
                   <span>
                     {order.from_date
                       ? new Date(order.from_date).toLocaleDateString()
@@ -228,7 +269,6 @@ const OrdersPage = () => {
                 <span className="bg-red-100 text-red-600 px-2 py-1 rounded-full text-xs font-semibold">
                   ₹{order.balance}
                 </span>
-
                 <button
                   onClick={() =>
                     setExpandedId(expandedId === order.id ? null : order.id)
@@ -237,7 +277,6 @@ const OrdersPage = () => {
                 >
                   {expandedId === order.id ? "Hide" : "Manage"}
                 </button>
-
                 <button
                   onClick={() => handleDelete(order.id)}
                   className="text-xs sm:text-sm text-red-600 font-medium"
@@ -258,7 +297,6 @@ const OrdersPage = () => {
                     handleExpenseChange(order.id, "kms", e.target.value)
                   }
                 />
-
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                   <input
                     type="number"

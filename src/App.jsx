@@ -16,6 +16,8 @@ import LoginPage from "./components/LoginPage";
 import ProtectedRoute from "./components/ProtectedRoute";
 import ForgotPassword from "./components/ForgetPassword";
 import UpdatePassword from "./components/UpdatePassword";
+import VehicleListPage from "./components/VehicleListPage";
+import VehicleMaintenancePage from "./components/VehicleMaintenancePage";
 
 function App() {
   const [session, setSession] = useState(null);
@@ -134,7 +136,23 @@ function App() {
               </ProtectedRoute>
             }
           />
-
+          <Route
+            path="/vehicle/:id"
+            element={
+              <ProtectedRoute>
+                <VehicleMaintenancePage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/vehicleList"
+            element={
+              <ProtectedRoute>
+                <VehicleListPage />
+              </ProtectedRoute>
+            }
+          />
+  
           <Route path="/forgot-password" element={<ForgotPassword />} />
           <Route path="/update-password" element={<UpdatePassword />} />
 

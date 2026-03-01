@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import  { useState, useEffect } from "react";
 import { supabase } from "../supabaseClient";
 
 const DriverPage = () => {
@@ -7,6 +7,7 @@ const DriverPage = () => {
   const [driverMobile, setDriverMobile] = useState("");
   const [editingId, setEditingId] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [showModal, setShowModal] = useState(false); // ✅ Modal state
 
   // Fetch all drivers
   const fetchDrivers = async () => {
@@ -35,28 +36,34 @@ const DriverPage = () => {
     }
 
     setLoading(true);
+
     try {
       if (editingId) {
-        // Update existing driver
         const { error } = await supabase
           .from("drivers")
-          .update({ driver_name: driverName, driver_mobile: driverMobile })
+          .update({
+            driver_name: driverName,
+            driver_mobile: driverMobile,
+          })
           .eq("id", editingId);
 
         if (error) throw error;
-        alert("Driver updated successfully!");
       } else {
-        // Insert new driver
-        const { error } = await supabase
-          .from("drivers")
-          .insert([{ driver_name: driverName, driver_mobile: driverMobile }]);
+        const { error } = await supabase.from("drivers").insert([
+          {
+            driver_name: driverName,
+            driver_mobile: driverMobile,
+          },
+        ]);
+
         if (error) throw error;
-        alert("Driver added successfully!");
       }
+
       // Reset form
       setDriverName("");
       setDriverMobile("");
       setEditingId(null);
+      setShowModal(false);
       fetchDrivers();
     } catch (err) {
       console.error(err);
@@ -71,15 +78,17 @@ const DriverPage = () => {
     setDriverName(driver.driver_name);
     setDriverMobile(driver.driver_mobile);
     setEditingId(driver.id);
+    setShowModal(true); // ✅ Open modal in edit mode
   };
 
   // Delete driver
   const handleDelete = async (id) => {
-    if (window.confirm("Are you sure you want to delete this driver?")) {
-      const { error } = await supabase.from("drivers").delete().eq("id", id);
-      if (error) alert("Failed to delete driver");
-      else fetchDrivers();
-    }
+    if (!window.confirm("Are you sure you want to delete this driver?"))
+      return;
+
+    const { error } = await supabase.from("drivers").delete().eq("id", id);
+    if (error) alert("Failed to delete driver");
+    else fetchDrivers();
   };
 
   return (
@@ -88,56 +97,51 @@ const DriverPage = () => {
         Manage Drivers
       </h2>
 
-      {/* Add / Edit Form */}
-      <div className="max-w-md mx-auto bg-white p-6 rounded-lg shadow-lg mb-6 space-y-4">
-        <input
-          type="text"
-          value={driverName}
-          onChange={(e) => setDriverName(e.target.value)}
-          placeholder="Enter driver name"
-          className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-[#D4AF37]"
-        />
-        <input
-          type="text"
-          value={driverMobile}
-          onChange={(e) => setDriverMobile(e.target.value)}
-          placeholder="Enter driver mobile"
-          className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-[#D4AF37]"
-        />
+      {/* ✅ Add Driver Button */}
+      <div className="max-w-md mx-auto mb-6 text-right">
         <button
-          onClick={handleSave}
-          disabled={loading}
-          className="w-full bg-[#D4AF37] text-white py-2 rounded font-semibold hover:bg-yellow-500 transition disabled:opacity-50"
+          onClick={() => {
+            setEditingId(null);
+            setDriverName("");
+            setDriverMobile("");
+            setShowModal(true);
+          }}
+          className="bg-black text-white px-5 py-2.5 rounded-xl text-sm font-medium hover:bg-gray-800 transition"
         >
-          {loading ? "Saving..." : editingId ? "Update Driver" : "Add Driver"}
+          + Add Driver
         </button>
       </div>
 
       {/* Driver List */}
-      <div className="max-w-md mx-auto bg-white p-4 rounded-lg shadow-lg">
+      <div className="max-w-md mx-auto bg-white p-4 rounded-xl shadow">
         {drivers.length === 0 ? (
           <p className="text-gray-500 text-center">No drivers found.</p>
         ) : (
-          <ul className="space-y-2">
+          <ul className="space-y-3">
             {drivers.map((driver) => (
               <li
                 key={driver.id}
-                className="flex justify-between items-center bg-gray-100 p-3 rounded shadow-sm"
+                className="flex justify-between items-center bg-gray-50 p-3 rounded-lg border"
               >
                 <div>
-                  <p className="font-medium">{driver.driver_name}</p>
-                  <p className="text-gray-600 text-sm">{driver.driver_mobile}</p>
+                  <p className="font-medium text-gray-800">
+                    {driver.driver_name}
+                  </p>
+                  <p className="text-gray-500 text-sm">
+                    {driver.driver_mobile}
+                  </p>
                 </div>
+
                 <div className="flex gap-2">
                   <button
                     onClick={() => handleEdit(driver)}
-                    className="bg-blue-500 text-white px-3 py-1 rounded hover:bg-blue-600"
+                    className="text-blue-600 text-sm font-medium"
                   >
                     Edit
                   </button>
                   <button
                     onClick={() => handleDelete(driver.id)}
-                    className="bg-red-500 text-white px-3 py-1 rounded hover:bg-red-600"
+                    className="text-red-600 text-sm font-medium"
                   >
                     Delete
                   </button>
@@ -147,6 +151,56 @@ const DriverPage = () => {
           </ul>
         )}
       </div>
+
+      {/* ================= MODAL ================= */}
+      {showModal && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+          <div className="bg-white w-full max-w-sm rounded-2xl p-6 shadow-xl relative">
+
+            {/* Close Button */}
+            <button
+              onClick={() => setShowModal(false)}
+              className="absolute top-3 right-3 text-gray-400 hover:text-black"
+            >
+              ✕
+            </button>
+
+            <h3 className="text-lg font-semibold mb-6">
+              {editingId ? "Update Driver" : "Add Driver"}
+            </h3>
+
+            <div className="space-y-4">
+              <input
+                type="text"
+                value={driverName}
+                onChange={(e) => setDriverName(e.target.value)}
+                placeholder="Driver Name"
+                className="w-full p-2.5 border rounded-lg focus:ring-2 focus:ring-[#D4AF37] outline-none"
+              />
+
+              <input
+                type="text"
+                value={driverMobile}
+                onChange={(e) => setDriverMobile(e.target.value)}
+                placeholder="Driver Mobile"
+                className="w-full p-2.5 border rounded-lg focus:ring-2 focus:ring-[#D4AF37] outline-none"
+              />
+            </div>
+
+            <button
+              onClick={handleSave}
+              disabled={loading}
+              className="mt-6 w-full bg-[#D4AF37] text-white py-2.5 rounded-lg font-medium hover:bg-yellow-500 transition disabled:opacity-50"
+            >
+              {loading
+                ? "Saving..."
+                : editingId
+                ? "Update Driver"
+                : "Add Driver"}
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

@@ -1,12 +1,19 @@
 import { useLocation, useNavigate } from "react-router-dom";
-import { AiFillHome, AiFillBook, AiOutlineCar, AiOutlineFileText, AiOutlineWallet } from "react-icons/ai";
+import {
+  AiFillHome,
+  AiFillBook,
+  AiOutlineCar,
+  AiOutlineFileText,
+  AiOutlineWallet,
+} from "react-icons/ai";
 import { useEffect, useState } from "react";
 
 const navItems = [
   { name: "Home", path: "/dashboard", icon: <AiFillHome size={22} /> },
   { name: "Bookings", path: "/booking", icon: <AiFillBook size={22} /> },
-  { name: "Trips", path: "/trips", icon: <AiOutlineCar size={22} /> },
   { name: "Orders", path: "/orders", icon: <AiOutlineFileText size={22} /> },
+  { name: "Trips", path: "/trips", icon: <AiOutlineCar size={22} /> },
+
   { name: "Cashbooks", path: "/cashBook", icon: <AiOutlineWallet size={22} /> },
 ];
 
