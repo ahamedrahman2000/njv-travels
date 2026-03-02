@@ -42,7 +42,7 @@ const LoginPage = () => {
     }
 
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: "https://njv-travels.netlify.app/update-password",
+      redirectTo: "https://njvtravels.netlify.app/update-password",
     });
 
     if (error) {
