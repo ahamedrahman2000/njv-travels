@@ -1,4 +1,4 @@
-import   { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { supabase } from "../supabaseClient";
 import { useNavigate } from "react-router-dom";
 import { FaTools, FaTrash } from "react-icons/fa";
@@ -10,7 +10,7 @@ const VehicleListPage = () => {
   const [showModal, setShowModal] = useState(false);
   const navigate = useNavigate();
 
-  // ✅ Fetch vehicles with maintenance + trips
+  // ✅ Fetch vehicles with maintenance + trips + profit
   const fetchVehicles = async () => {
     const { data, error } = await supabase
       .from("vehicles")
@@ -18,8 +18,8 @@ const VehicleListPage = () => {
         `
         *,
         vehicle_maintenance(cost),
-        trips(id)
-      `,
+        trips(id, net_profit)
+        `
       )
       .order("id", { ascending: true });
 
@@ -30,19 +30,30 @@ const VehicleListPage = () => {
 
     if (data) {
       const formatted = data.map((v) => {
-        // ✅ Calculate total maintenance expense
+        // ✅ Total Maintenance Expense
         const totalExpense = (v.vehicle_maintenance || []).reduce(
           (sum, item) => sum + Number(item.cost || 0),
-          0,
+          0
         );
 
-        // ✅ Count total trips
+        // ✅ Total Trips Count
         const totalTrips = (v.trips || []).length;
+
+        // ✅ Total Trip Profit
+        const totalTripProfit = (v.trips || []).reduce(
+          (sum, trip) => sum + Number(trip.net_profit || 0),
+          0
+        );
+
+        // ✅ Net Profit (After Expense)
+        const netProfit = totalTripProfit - totalExpense;
 
         return {
           ...v,
           totalExpense,
           totalTrips,
+          totalTripProfit,
+          netProfit,
         };
       });
 
@@ -90,15 +101,16 @@ const VehicleListPage = () => {
     <div className="min-h-screen bg-gray-100 px-4 py-8 sm:px-8">
       {/* Header */}
       <div className="max-w-6xl mx-auto mb-8">
-        <h1 className="text-3xl font-bold text-gray-800">Vehicle Management</h1>
+        <h1 className="text-3xl font-bold text-gray-800">
+          Vehicle Management
+        </h1>
         <p className="text-gray-500 text-sm mt-1">
           Manage your vehicles, expenses and trips
         </p>
       </div>
 
-     
       {/* Add Vehicle Button */}
-      <div className="max-w-2xl text-end  mb-8">
+      <div className="max-w-2xl text-end mb-8">
         <button
           onClick={() => setShowModal(true)}
           className="bg-black text-white px-5 py-2.5 rounded-xl text-sm font-medium hover:bg-gray-800 transition"
@@ -106,11 +118,11 @@ const VehicleListPage = () => {
           + Add New Vehicle
         </button>
       </div>
+
       {/* ================= VEHICLE MODAL ================= */}
       {showModal && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
           <div className="bg-white w-full max-w-md rounded-2xl p-6 shadow-xl relative">
-            {/* Close Button */}
             <button
               onClick={() => setShowModal(false)}
               className="absolute top-3 right-3 text-gray-400 hover:text-black"
@@ -124,7 +136,9 @@ const VehicleListPage = () => {
 
             <div className="space-y-4">
               <div>
-                <label className="text-xs text-gray-500">Vehicle Name</label>
+                <label className="text-xs text-gray-500">
+                  Vehicle Name
+                </label>
                 <input
                   type="text"
                   placeholder="Enter vehicle name"
@@ -135,7 +149,9 @@ const VehicleListPage = () => {
               </div>
 
               <div>
-                <label className="text-xs text-gray-500">Vehicle Number</label>
+                <label className="text-xs text-gray-500">
+                  Vehicle Number
+                </label>
                 <input
                   type="text"
                   placeholder="Enter vehicle number"
@@ -172,11 +188,12 @@ const VehicleListPage = () => {
                 <h3 className="text-lg font-semibold text-gray-800">
                   {v.vehicle_name}
                 </h3>
-                <p className="text-sm text-gray-500">{v.vehicle_number}</p>
+                <p className="text-sm text-gray-500">
+                  {v.vehicle_number}
+                </p>
               </div>
             </div>
 
-            {/* Divider */}
             <div className="border-t my-4"></div>
 
             {/* Info Section */}
@@ -189,8 +206,17 @@ const VehicleListPage = () => {
               </div>
 
               <div className="flex justify-between">
-                <span className="text-gray-500">Total Expense</span>
+                <span className="text-gray-500">Trip Profit</span>
                 <span className="font-semibold text-green-600">
+                  ₹ {v.totalTripProfit || 0}
+                </span>
+              </div>
+
+              <div className="flex justify-between">
+                <span className="text-gray-500">
+                  Maintenance Expense
+                </span>
+                <span className="font-semibold text-red-500">
                   ₹ {v.totalExpense || 0}
                 </span>
               </div>
@@ -199,6 +225,19 @@ const VehicleListPage = () => {
                 <span className="text-gray-500">Total Trips</span>
                 <span className="font-semibold text-blue-600">
                   {v.totalTrips || 0}
+                </span>
+              </div>
+
+              <div className="border-t pt-2 flex justify-between text-sm">
+                <span className="font-semibold">Net Profit</span>
+                <span
+                  className={`font-bold ${
+                    v.netProfit >= 0
+                      ? "text-green-700"
+                      : "text-red-700"
+                  }`}
+                >
+                  ₹ {v.netProfit || 0}
                 </span>
               </div>
             </div>

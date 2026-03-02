@@ -3,8 +3,7 @@ import { useEffect, useState } from "react";
 import { supabase } from "./supabaseClient";
 
 import Dashboard from "./components/Dashboard";
-import BookingForm from "./components/BookingForm";
-import VehiclePage from "./components/VehiclePage";
+import BookingForm from "./components/BookingForm"; 
 import TripsPage from "./components/TripsPage";
 import OrdersPage from "./components/OrdersPage";
 import BottomNav from "./components/BottomNav";
@@ -82,15 +81,7 @@ function App() {
               </ProtectedRoute>
             }
           />
-
-          <Route
-            path="/vehicles"
-            element={
-              <ProtectedRoute>
-                <VehiclePage />
-              </ProtectedRoute>
-            }
-          />
+ 
 
           <Route
             path="/trips"

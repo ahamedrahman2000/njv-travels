@@ -1,4 +1,4 @@
-import  { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { supabase } from "../supabaseClient";
 import { useParams } from "react-router-dom";
 import { FaTrash, FaEdit, FaPlus } from "react-icons/fa";
@@ -15,35 +15,36 @@ const VehicleDetailPage = () => {
   const [date, setDate] = useState("");
   const [editingId, setEditingId] = useState(null);
   const [showModal, setShowModal] = useState(false);
-
+  const [description, setDescription] = useState("");
+  const [serviceKm, setServiceKm] = useState("");
   // Popup
   const [popupMessage, setPopupMessage] = useState("");
   const [showPopup, setShowPopup] = useState(false);
 
- const fetchData = useCallback(async () => {
-  const { data: vData, error: vError } = await supabase
-    .from("vehicles")
-    .select("*")
-    .eq("id", id)
-    .single();
+  const fetchData = useCallback(async () => {
+    const { data: vData, error: vError } = await supabase
+      .from("vehicles")
+      .select("*")
+      .eq("id", id)
+      .single();
 
-  if (vError) return console.error(vError.message);
+    if (vError) return console.error(vError.message);
 
-  const { data: mData, error: mError } = await supabase
-    .from("vehicle_maintenance")
-    .select("*")
-    .eq("vehicle_id", id)
-    .order("service_date", { ascending: false });
+    const { data: mData, error: mError } = await supabase
+      .from("vehicle_maintenance")
+      .select("*")
+      .eq("vehicle_id", id)
+      .order("service_date", { ascending: false });
 
-  if (mError) console.error(mError.message);
+    if (mError) console.error(mError.message);
 
-  setVehicle(vData);
-  setItems(mData || []);
-}, [id]); // ✅ add id as dependency
+    setVehicle(vData);
+    setItems(mData || []);
+  }, [id]); // ✅ add id as dependency
 
-useEffect(() => {
-  fetchData();
-}, [fetchData]); // ✅ now ESLint happy
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]); // ✅ now ESLint happy
 
   // Update vehicle details
   const updateVehicle = async () => {
@@ -69,9 +70,9 @@ useEffect(() => {
       cost: Number(cost),
       service_date: date,
       type: "Maintenance",
-      description: title,
+      description: description, // ✅ use real description
+      service_km: Number(serviceKm), // ✅ add this
     };
-
     let error;
     if (editingId) {
       ({ error } = await supabase
@@ -97,7 +98,8 @@ useEffect(() => {
     setDate("");
     setEditingId(null);
     setShowModal(false);
-
+    setDescription(""); // ✅ reset
+    setServiceKm("");
     fetchData();
   };
 
@@ -178,7 +180,7 @@ useEffect(() => {
 
         <div className="mb-4">
           <label className="text-xs sm:text-sm font-medium">
-            Odometer (KM)
+            Total KM Driven
           </label>
           <input
             type="number"
@@ -234,12 +236,42 @@ useEffect(() => {
                     onChange={(e) => setCost(e.target.value)}
                     className="border p-2 rounded-lg text-sm"
                   />
-                  <input
-                    type="date"
-                    value={date}
-                    onChange={(e) => setDate(e.target.value)}
-                    className="border p-2 rounded-lg text-sm"
-                  />
+                  <textarea
+                    placeholder="Description"
+                    value={description}
+                    onChange={(e) => setDescription(e.target.value)}
+                    className="border p-2 rounded-lg text-sm min-h-[80px] resize-none"
+                  ></textarea>
+
+                  <div className="relative">
+                    <label className="text-xs text-gray-500 block mb-1">
+                      Service Date
+                    </label>
+
+                    <input
+                      type="date"
+                      value={date}
+                      onChange={(e) => setDate(e.target.value)}
+                      className="w-full border p-2.5 pr-10 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                    />
+
+                    {/* Calendar Icon */}
+                    <span className="absolute right-3 top-[36px] text-gray-400 pointer-events-none">
+                      📅
+                    </span>
+                  </div>
+                  <div>
+                    <label className="text-xs text-gray-500">
+                      KM at Service
+                    </label>
+                    <input
+                      type="number"
+                      placeholder="Enter KM reading"
+                      value={serviceKm}
+                      onChange={(e) => setServiceKm(e.target.value)}
+                      className="w-full border p-2 rounded-lg text-sm"
+                    />
+                  </div>
                 </div>
 
                 <div className="flex justify-end gap-3 mt-4">
@@ -261,67 +293,103 @@ useEffect(() => {
           )}
 
           {/* ================= MAINTENANCE TABLE ================= */}
-         <div className="overflow-x-auto">
-  <table className="w-full text-sm border-collapse border border-gray-200 mt-4">
-    <thead className="bg-gray-100">
-      <tr>
-        <th className="px-2 py-3 text-left font-medium text-gray-700">Date</th>
-        <th className="px-2 py-3 text-left font-medium text-gray-700">Title</th>
-        <th className="px-2 py-3 text-right font-medium text-gray-700">Cost</th>
-        <th className="px-2 py-3 text-center font-medium text-gray-700">Actions</th>
-      </tr>
-    </thead>
-    <tbody>
-      {items.map((item, idx) => (
-        <tr
-          key={item.id}
-          className={idx % 2 === 0 ? "bg-white" : "bg-gray-50"}
-        >
-          <td className="px-2 py-3">{item.service_date}</td>
-          <td className="px-2 py-3">{item.title}</td>
-          <td className="px-2 py-3 text-right text-green-600 font-semibold">
-            ₹{item.cost}
-          </td>
-          <td className="px-2 py-3 text-center flex justify-center gap-3">
-            <FaEdit
-              className="cursor-pointer text-blue-600 hover:text-blue-800"
-              onClick={() => {
-                setTitle(item.title);
-                setCost(item.cost);
-                setDate(item.service_date);
-                setEditingId(item.id);
-                setShowModal(true);
-              }}
-            />
-            <FaTrash
-              className="cursor-pointer text-red-600 hover:text-red-800"
-              onClick={() => deleteItem(item.id)}
-            />
-          </td>
-        </tr>
-      ))}
+          <div className="overflow-x-auto mt-6">
+            <div className="bg-white rounded-xl shadow-sm  border-gray-200">
+              <table className="min-w-full text-sm text-gray-700">
+                {/* HEADER */}
+                <thead className="bg-gray-50 border-b border-gray-200">
+                  <tr>
+                    <th className="px-2 py-4 text-left font-semibold">Date</th>
+                    <th className="px-2 py-4 text-left font-semibold">Title</th>
+                    <th className="px-2 py-4 text-left font-semibold">
+                      Description
+                    </th>
+                    <th className="px-2 py-4 text-right font-semibold">Cost</th>
+                    <th className="px-4 py-3 text-left">KM</th>
+                    <th className="px-2 py-4 text-center font-semibold">
+                      Actions
+                    </th>
+                  </tr>
+                </thead>
 
-      {items.length === 0 && (
-        <tr>
-          <td colSpan="4" className="text-center py-6 text-gray-400">
-            No maintenance items found.
-          </td>
-        </tr>
-      )}
-    </tbody>
+                {/* BODY */}
+                <tbody className="divide-y divide-gray-100">
+                  {items.map((item) => (
+                    <tr key={item.id} className="hover:bg-gray-50 transition">
+                      <td className="px-2 py-4 whitespace-nowrap text-gray-600">
+                        {item.service_date}
+                      </td>
 
-    {items.length > 0 && (
-      <tfoot className="bg-gray-100 font-semibold">
-        <tr>
-          <td className="px-2 py-3">Total</td>
-          <td></td>
-          <td className="px-2 py-3 text-right text-green-700">₹{total}</td>
-          <td></td>
-        </tr>
-      </tfoot>
-    )}
-  </table>
-</div>
+                      <td className="px-2 py-4 font-medium text-gray-800">
+                        {item.title}
+                      </td>
+
+                      <td className="px-2 py-4 text-gray-500 max-w-xs">
+                        {item.description}
+                      </td>
+
+                      <td className="px-2 py-4 text-right font-semibold text-green-600 whitespace-nowrap">
+                        ₹{item.cost}
+                      </td>
+                      <td className="px-4 py-3 font-medium text-gray-700">
+                        {item.service_km || "-"} KM
+                      </td>
+
+                      <td className="px-2 py-4 text-center">
+                        <div className="flex justify-center gap-4">
+                          <FaEdit
+                            className="cursor-pointer text-blue-600 hover:text-blue-800"
+                            onClick={() => {
+                              setTitle(item.title);
+                              setCost(item.cost);
+                              setDate(item.service_date);
+                              setDescription(item.description || "");
+                              setEditingId(item.id);
+                              setShowModal(true);
+                            }}
+                          />
+
+                          <FaTrash
+                            className="cursor-pointer text-red-600 hover:text-red-800"
+                            onClick={() => deleteItem(item.id)}
+                          />
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+
+                  {items.length === 0 && (
+                    <tr>
+                      <td
+                        colSpan="5"
+                        className="text-center py-10 text-gray-400"
+                      >
+                        No maintenance items found.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+
+                {/* FOOTER */}
+                {items.length > 0 && (
+                  <tfoot className="bg-gray-50 border-t border-gray-200">
+                    <tr>
+                      <td
+                        colSpan="3"
+                        className="px-2 py-4 font-semibold text-gray-700"
+                      >
+                        Total
+                      </td>
+                      <td className="px-2 py-4 text-right font-bold text-green-700">
+                        ₹{total}
+                      </td>
+                      <td></td>
+                    </tr>
+                  </tfoot>
+                )}
+              </table>
+            </div>
+          </div>
         </div>
       </div>
     </div>
