@@ -1,4 +1,3 @@
- 
 import { useState, useEffect, useMemo } from "react";
 import { supabase } from "../supabaseClient";
 import { AiOutlineDelete } from "react-icons/ai";
@@ -244,11 +243,11 @@ const OrdersPage = () => {
               <div className="flex flex-col flex-1 min-w-0">
                 <p className="text-sm font-semibold truncate">
                   #{order.id} - {order.customer_name}
-                  {order.vehicle_id && (
+                  {/* {order.vehicle_id && (
                     <span className="text-xs text-gray-500 font-normal ml-2">
                       ({vehicleMap[order.vehicle_id]})
                     </span>
-                  )}
+                  )} */}
                 </p>
                 <p className="text-xs flex flex-col sm:text-sm text-gray-500 truncate">
                   <span>
@@ -265,7 +264,7 @@ const OrdersPage = () => {
                   </span>
                 </p>
               </div>
-              <div className="flex items-center gap-2 shrink-0">
+              {/* <div className="flex items-center gap-2 shrink-0">
                 <span className="bg-red-100 text-red-600 px-2 py-1 rounded-full text-xs font-semibold">
                   ₹{order.balance}
                 </span>
@@ -283,6 +282,36 @@ const OrdersPage = () => {
                 >
                   <AiOutlineDelete size={18} />
                 </button>
+              </div> */}
+
+              <div className="flex flex-col items-end gap-1 shrink-0">
+                {order.vehicle_id && (
+                  <span className="text-xs text-gray-500 font-normal text-right">
+                    {vehicleMap[order.vehicle_id]}
+                  </span>
+                )}
+
+                <div className="flex items-center gap-2">
+                  <span className="bg-red-100 text-red-600 px-2 py-1 rounded-full text-xs font-semibold">
+                    ₹{order.balance}
+                  </span>
+
+                  <button
+                    onClick={() =>
+                      setExpandedId(expandedId === order.id ? null : order.id)
+                    }
+                    className="text-xs sm:text-sm text-blue-600 font-medium"
+                  >
+                    {expandedId === order.id ? "Hide" : "Manage"}
+                  </button>
+
+                  <button
+                    onClick={() => handleDelete(order.id)}
+                    className="text-xs sm:text-sm text-red-600 font-medium"
+                  >
+                    <AiOutlineDelete size={18} />
+                  </button>
+                </div>
               </div>
             </div>
 
