@@ -1,61 +1,73 @@
-import  { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { supabase } from "../supabaseClient";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
+// eslint-disable-next-line
+import DatePicker from "react-datepicker";
+import "react-datepicker/dist/react-datepicker.css";
 
 const CashBook = () => {
   const [trips, setTrips] = useState([]);
   const [maintenance, setMaintenance] = useState([]);
-  const [filterMonth, setFilterMonth] = useState("");
-  const [filterYear, setFilterYear] = useState("");
+  const [fromDate, setFromDate] = useState(null);
+  const [toDate, setToDate] = useState(null);
   const [filterVehicle, setFilterVehicle] = useState("");
-  const [vehicleMap, setVehicleMap] = useState({}); // vehicle_id -> vehicle_name
+  const [vehicleMap, setVehicleMap] = useState({});
   const [filterType, setFilterType] = useState("");
+
   useEffect(() => {
     fetchVehicles();
     fetchTrips();
     fetchMaintenance();
   }, []);
 
-  // Fetch Vehicles
   const fetchVehicles = async () => {
-    const { data, error } = await supabase
-      .from("vehicles")
-      .select("id, vehicle_name");
-    if (!error && data) {
+    const { data } = await supabase.from("vehicles").select("id, vehicle_name");
+    if (data) {
       const map = {};
       data.forEach((v) => (map[v.id] = v.vehicle_name));
       setVehicleMap(map);
     }
   };
 
-  // Fetch Trips
   const fetchTrips = async () => {
-    const { data, error } = await supabase
+    const { data } = await supabase
       .from("trips")
       .select("*")
       .order("from_date", { ascending: false });
 
-    if (!error) setTrips(data || []);
+    if (data) setTrips(data);
   };
 
-  // Fetch Maintenance
   const fetchMaintenance = async () => {
-    const { data, error } = await supabase
-      .from("vehicle_maintenance")
-      .select("*");
-    if (!error) setMaintenance(data || []);
+    const { data } = await supabase.from("vehicle_maintenance").select("*");
+    if (data) setMaintenance(data);
   };
 
-  const yearList = [
-    ...new Set(
-      trips
-        .filter((trip) => trip.from_date)
-        .map((trip) => new Date(trip.from_date).getFullYear()),
-    ),
-  ].sort((a, b) => b - a);
+  // ================= DATE LISTS FOR HIGHLIGHT =================
 
-  // ================= UNIQUE VEHICLE LIST =================
+  const tripDates = trips
+    .filter((t) => t.from_date)
+    .map((t) => new Date(t.from_date).toDateString());
+
+  const maintenanceDates = maintenance
+    .filter((m) => m.service_date)
+    .map((m) => new Date(m.service_date).toDateString());
+
+  const getDayClass = (date) => {
+    const d = date.toDateString();
+
+    const isTrip = tripDates.includes(d);
+    const isMaintenance = maintenanceDates.includes(d);
+
+    if (isTrip && isMaintenance) return "both-day";
+    if (isTrip) return "trip-day";
+    if (isMaintenance) return "maintenance-day";
+    return "";
+  };
+
+  // ================= VEHICLE LIST =================
+
   const vehicleList = [
     ...new Set(trips.map((t) => t.vehicle_id).filter(Boolean)),
   ]
@@ -63,65 +75,37 @@ const CashBook = () => {
     .filter(Boolean);
 
   // ================= FILTER LOGIC =================
-  // const filteredTrips = trips.filter((trip) => {
-  //   if (!trip.from_date) return false;
-  //   const d = new Date(trip.from_date);
-  //   const month = d.getMonth() + 1;
-  //   const year = d.getFullYear();
 
-  //   const vehicleName = vehicleMap[trip.vehicle_id] || "";
-
-  //   if (filterMonth && Number(filterMonth) !== month) return false;
-  //   if (filterYear && Number(filterYear) !== year) return false;
-  //   if (filterVehicle && vehicleName !== filterVehicle) return false;
-
-  //   return true;
-  // });
-
-  // const filteredMaintenance = maintenance.filter((m) => {
-  //   if (!m.service_date) return false;
-  //   const d = new Date(m.service_date);
-  //   const month = d.getMonth() + 1;
-  //   const year = d.getFullYear();
-
-  //   const vehicleName = vehicleMap[m.vehicle_id] || "";
-
-  //   if (filterMonth && Number(filterMonth) !== month) return false;
-  //   if (filterYear && Number(filterYear) !== year) return false;
-  //   if (filterVehicle && vehicleName !== filterVehicle) return false;
-
-  //   return true;
-  // });
   const filteredTrips = trips.filter((trip) => {
     if (!trip.from_date) return false;
+
     const d = new Date(trip.from_date);
-    const month = d.getMonth() + 1;
-    const year = d.getFullYear();
     const vehicleName = vehicleMap[trip.vehicle_id] || "";
 
-    if (filterMonth && Number(filterMonth) !== month) return false;
-    if (filterYear && Number(filterYear) !== year) return false;
+    if (fromDate && d < fromDate) return false;
+    if (toDate && d > toDate) return false;
     if (filterVehicle && vehicleName !== filterVehicle) return false;
-    if (filterType && "Trip" !== filterType) return false; // ✅ Type filter
+    if (filterType && filterType !== "Trip") return false;
 
     return true;
   });
 
   const filteredMaintenance = maintenance.filter((m) => {
     if (!m.service_date) return false;
+
     const d = new Date(m.service_date);
-    const month = d.getMonth() + 1;
-    const year = d.getFullYear();
     const vehicleName = vehicleMap[m.vehicle_id] || "";
 
-    if (filterMonth && Number(filterMonth) !== month) return false;
-    if (filterYear && Number(filterYear) !== year) return false;
+    if (fromDate && d < fromDate) return false;
+    if (toDate && d > toDate) return false;
     if (filterVehicle && vehicleName !== filterVehicle) return false;
-    if (filterType && "Maintenance" !== filterType) return false; // ✅ Type filter
+    if (filterType && filterType !== "Maintenance") return false;
 
     return true;
   });
-  // ================= TOTAL CALCULATIONS =================
+
+  // ================= TOTALS =================
+
   const totalRevenue = filteredTrips.reduce(
     (sum, t) => sum + Number(t.total_amount || 0),
     0,
@@ -145,45 +129,9 @@ const CashBook = () => {
   const totalExpense = tripExpense + maintenanceExpense;
   const totalProfit = totalRevenue - totalExpense;
 
-  // ================= VEHICLE REPORT =================
-  const vehicleReport = {};
+  // ================= COMBINED DATA =================
 
-  filteredTrips.forEach((trip) => {
-    const vehicle = vehicleMap[trip.vehicle_id] || "-";
-
-    if (!vehicleReport[vehicle]) {
-      vehicleReport[vehicle] = {
-        revenue: 0,
-        tripExpense: 0,
-        maintenanceExpense: 0,
-      };
-    }
-
-    vehicleReport[vehicle].revenue += Number(trip.total_amount || 0);
-    vehicleReport[vehicle].tripExpense +=
-      Number(trip.fuel_expense || 0) +
-      Number(trip.toll_expense || 0) +
-      Number(trip.driver_salary || 0) +
-      Number(trip.other_expense || 0);
-  });
-
-  filteredMaintenance.forEach((m) => {
-    const vehicle = vehicleMap[m.vehicle_id] || "-";
-
-    if (!vehicleReport[vehicle]) {
-      vehicleReport[vehicle] = {
-        revenue: 0,
-        tripExpense: 0,
-        maintenanceExpense: 0,
-      };
-    }
-
-    vehicleReport[vehicle].maintenanceExpense += Number(m.cost || 0);
-  });
-
-  // ================= COMBINED & SORTED DATA =================
   const detailedData = [
-    // Trips
     ...filteredTrips.map((trip) => {
       const expense =
         Number(trip.fuel_expense || 0) +
@@ -195,56 +143,37 @@ const CashBook = () => {
         date: new Date(trip.from_date),
         vehicle: vehicleMap[trip.vehicle_id] || "-",
         type: "Trip",
-        description: `${trip.destination_from || ""} - ${trip.destination_to || ""}`,
+        description: `${trip.destination_from || ""} - ${
+          trip.destination_to || ""
+        }`,
         revenue: Number(trip.total_amount || 0),
         expense: expense,
         profit: Number(trip.total_amount || 0) - expense,
       };
     }),
-    // Maintenance
+
     ...filteredMaintenance.map((m) => ({
       date: new Date(m.service_date),
       vehicle: vehicleMap[m.vehicle_id] || "-",
-      type: m.type || "Maintenance",
-      description: m.description || m.title || "",
+      type: "Maintenance",
+      description: m.description || "",
       revenue: 0,
       expense: Number(m.cost || 0),
       profit: -Number(m.cost || 0),
     })),
   ].sort((a, b) => b.date - a.date);
 
-  // ================= EXPORT PDF =================
+  // ================= PDF EXPORT =================
+
   const exportToPDF = () => {
     const doc = new jsPDF();
 
-    doc.setFontSize(16);
-    doc.text("NJV Tours and Travels", 14, 15);
+    doc.text("CashBook Financial Report", 14, 15);
 
-    doc.setFontSize(11);
-    doc.text("CashBook Financial Report", 14, 22);
-
-    doc.setFontSize(9);
-    doc.text(
-      `Filter: ${filterMonth ? "Month " + filterMonth : "All Months"} | ${
-        filterYear ? "Year " + filterYear : "All Years"
-      } | ${filterVehicle ? filterVehicle : "All Vehicles"}`,
-      14,
-      30,
-    );
-
-    // Summary Table
     autoTable(doc, {
-      startY: 35,
-      theme: "grid",
-      styles: { fontSize: 9 },
+      startY: 20,
       head: [
-        [
-          "Revenue",
-          "Trip Expense",
-          "Maintenance",
-          "Total Expense",
-          "Net Profit",
-        ],
+        ["Revenue", "Trip Expense", "Maintenance", "Total Expense", "Profit"],
       ],
       body: [
         [
@@ -257,15 +186,14 @@ const CashBook = () => {
       ],
     });
 
-    // Detailed Table
-    const tableData = detailedData.map((row) => [
-      row.date.toLocaleDateString(),
-      row.vehicle,
-      row.type,
-      row.description,
-      row.revenue,
-      row.expense,
-      row.profit,
+    const rows = detailedData.map((r) => [
+      r.date.toLocaleDateString(),
+      r.vehicle,
+      r.type,
+      r.description,
+      r.revenue,
+      r.expense,
+      r.profit,
     ]);
 
     autoTable(doc, {
@@ -281,23 +209,8 @@ const CashBook = () => {
           "Profit",
         ],
       ],
-      body: tableData,
-      theme: "grid",
-      styles: { fontSize: 8 },
-      headStyles: { fillColor: [212, 175, 55] },
+      body: rows,
     });
-
-    // Page numbers
-    const pageCount = doc.internal.getNumberOfPages();
-    for (let i = 1; i <= pageCount; i++) {
-      doc.setPage(i);
-      doc.setFontSize(8);
-      doc.text(
-        `Page ${i} of ${pageCount}`,
-        doc.internal.pageSize.width - 30,
-        doc.internal.pageSize.height - 10,
-      );
-    }
 
     doc.save("CashBook_Report.pdf");
   };
@@ -308,7 +221,7 @@ const CashBook = () => {
         CashBook Financial Report
       </h2>
 
-      {/* ================= OVERALL SUMMARY ================= */}
+      {/* SUMMARY */}
       <div className="bg-white rounded-xl shadow-sm overflow-x-auto">
         <table className="w-full text-sm">
           <tbody>
@@ -348,66 +261,57 @@ const CashBook = () => {
         </table>
       </div>
 
-      {/* ================= FILTER SECTION ================= */}
+      {/* FILTERS */}
       <div className="bg-white p-3 sm:p-4 rounded-xl shadow-sm">
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-          {/* Month */}
           <div>
-            <label className="text-xs text-gray-500">Month</label>
-            <select
-              value={filterMonth}
-              onChange={(e) => setFilterMonth(e.target.value)}
-              className="w-full text-sm border rounded-md px-2 py-1.5 mt-1 focus:ring-2 focus:ring-[#D4AF37] focus:outline-none"
-            >
-              <option value="">All</option>
-              {[...Array(12)].map((_, i) => (
-                <option key={i} value={i + 1}>
-                  {new Date(0, i).toLocaleString("default", { month: "long" })}
-                </option>
-              ))}
-            </select>
+            <label className="text-xs text-gray-500">From Date</label>
+            <DatePicker
+              selected={fromDate}
+              onChange={(date) => setFromDate(date)}
+              dayClassName={getDayClass}
+              showMonthDropdown
+              showYearDropdown
+              dropdownMode="select"
+              popperPlacement="bottom-start"
+              className="w-full text-sm border rounded-md px-2 py-1.5 mt-1 focus:ring-2 focus:ring-[#D4AF37]"
+            />
           </div>
 
-          {/* Year */}
           <div>
-            <label className="text-xs text-gray-500">Year</label>
-            <select
-              value={filterYear}
-              onChange={(e) => setFilterYear(e.target.value)}
-              className="w-full text-sm border rounded-md px-2 py-1.5 mt-1 focus:ring-2 focus:ring-[#D4AF37] focus:outline-none"
-            >
-              <option value="">All</option>
-              {yearList.map((year) => (
-                <option key={year} value={year}>
-                  {year}
-                </option>
-              ))}
-            </select>
+            <label className="text-xs text-gray-500">To Date</label>
+            <DatePicker
+              selected={toDate}
+              onChange={(date) => setToDate(date)}
+              dayClassName={getDayClass}
+              showMonthDropdown
+              showYearDropdown
+              dropdownMode="select"
+              popperPlacement="bottom-end"
+              className="w-full text-sm border rounded-md px-2 py-1.5 mt-1 focus:ring-2 focus:ring-[#D4AF37]"
+            />
           </div>
 
-          {/* Vehicle */}
           <div>
             <label className="text-xs text-gray-500">Vehicle</label>
             <select
               value={filterVehicle}
               onChange={(e) => setFilterVehicle(e.target.value)}
-              className="w-full text-sm border rounded-md px-2 py-1.5 mt-1 focus:ring-2 focus:ring-[#D4AF37] focus:outline-none"
+              className="w-full text-sm border rounded-md px-2 py-1.5 mt-1"
             >
               <option value="">All Vehicles</option>
               {vehicleList.map((v, i) => (
-                <option key={i} value={v}>
-                  {v}
-                </option>
+                <option key={i}>{v}</option>
               ))}
             </select>
           </div>
-          {/* Type */}
+
           <div>
             <label className="text-xs text-gray-500">Type</label>
             <select
               value={filterType}
               onChange={(e) => setFilterType(e.target.value)}
-              className="w-full text-sm border rounded-md px-2 py-1.5 mt-1 focus:ring-2 focus:ring-[#D4AF37] focus:outline-none"
+              className="w-full text-sm border rounded-md px-2 py-1.5 mt-1"
             >
               <option value="">All Types</option>
               <option value="Trip">Trip</option>
@@ -417,14 +321,14 @@ const CashBook = () => {
         </div>
       </div>
 
-      {/* ================= DATE WISE REPORT ================= */}
+      {/* REPORT */}
       <div className="bg-white rounded-xl shadow-sm overflow-x-auto">
         <div className="flex justify-between items-center p-4 border-b">
           <h3 className="font-semibold">Detailed Date Wise Report</h3>
 
           <button
             onClick={exportToPDF}
-            className="bg-[#D4AF37] text-white px-4 py-2 rounded-lg text-sm hover:bg-yellow-500 transition"
+            className="bg-[#D4AF37] text-white px-4 py-2 rounded-lg text-sm hover:bg-yellow-500"
           >
             Export PDF
           </button>
@@ -442,13 +346,14 @@ const CashBook = () => {
               <th className="px-4 py-3 text-right">Profit</th>
             </tr>
           </thead>
+
           <tbody>
             {detailedData.map((row, index) => (
               <tr key={index} className="border-t">
                 <td className="px-4 py-3">{row.date.toLocaleDateString()}</td>
                 <td className="px-4 py-3">{row.vehicle}</td>
-                <td className="px-4 py-3">{row.type || "-"}</td>
-                <td className="px-4 py-3">{row.description || "-"}</td>
+                <td className="px-4 py-3">{row.type}</td>
+                <td className="px-4 py-3">{row.description}</td>
                 <td className="px-4 py-3 text-right text-green-600">
                   ₹{row.revenue}
                 </td>
@@ -462,14 +367,6 @@ const CashBook = () => {
                 </td>
               </tr>
             ))}
-
-            {detailedData.length === 0 && (
-              <tr>
-                <td colSpan="7" className="text-center py-6 text-gray-500">
-                  No Records Found
-                </td>
-              </tr>
-            )}
           </tbody>
         </table>
       </div>

@@ -5,3 +5,27 @@
 html, body {
   overflow-x: hidden;
 }
+
+/* ===== Calendar Highlight Colors ===== */
+
+.trip-day {
+  background-color: #22c55e !important;
+  color: white !important;
+  border-radius: 50%;
+}
+
+.maintenance-day {
+  background-color: #ef4444 !important;
+  color: white !important;
+  border-radius: 50%;
+}
+
+.both-day {
+  background-color: #facc15 !important;
+  color: black !important;
+  border-radius: 50%;
+}
+
+ .react-datepicker-popper {
+  z-index: 9999;
+}

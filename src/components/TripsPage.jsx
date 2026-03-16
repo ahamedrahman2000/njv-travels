@@ -37,7 +37,7 @@ const TripsPage = () => {
     const { data, error } = await supabase
       .from("trips")
       .select("*")
-      .order("id", { ascending: true });
+      .order("id", { ascending: false });
 
     if (!error) setTrips(data);
   };
