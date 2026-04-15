@@ -8,15 +8,15 @@ const OrdersPage = () => {
   const [expenses, setExpenses] = useState({});
   const [expandedId, setExpandedId] = useState(null);
   const [selectedVehicle, setSelectedVehicle] = useState("all");
-  const [vehicleMap, setVehicleMap] = useState({}); // vehicle_id -> vehicle_name
+  const [vehicleMap, setVehicleMap] = useState({});
 
-  // Fetch vehicles for mapping
   useEffect(() => {
     const fetchVehicles = async () => {
-      const { data, error } = await supabase
+      const { data } = await supabase
         .from("vehicles")
         .select("id, vehicle_name");
-      if (!error && data) {
+
+      if (data) {
         const map = {};
         data.forEach((v) => (map[v.id] = v.vehicle_name));
         setVehicleMap(map);
@@ -25,39 +25,34 @@ const OrdersPage = () => {
     fetchVehicles();
   }, []);
 
-  // Fetch orders
   const fetchOrders = async () => {
-    const { data, error } = await supabase
+    const { data } = await supabase
       .from("orders")
       .select("*")
       .order("id", { ascending: true });
-    if (error) console.error(error);
-    else setOrders(data);
+
+    if (data) setOrders(data);
   };
 
   useEffect(() => {
     fetchOrders();
   }, []);
 
-  // Unique Vehicles
   const vehicles = useMemo(
     () => ["all", ...new Set(orders.map((o) => o.vehicle_id).filter(Boolean))],
     [orders],
   );
 
-  // Filtered Orders
   const filteredOrders =
     selectedVehicle === "all"
       ? orders
       : orders.filter((o) => o.vehicle_id === Number(selectedVehicle));
 
-  // Total Pending
   const totalPending = useMemo(
     () => filteredOrders.reduce((sum, o) => sum + Number(o.balance || 0), 0),
     [filteredOrders],
   );
 
-  // Handle Expense
   const handleExpenseChange = (id, field, value) => {
     setExpenses((prev) => ({
       ...prev,
@@ -65,7 +60,6 @@ const OrdersPage = () => {
     }));
   };
 
-  // Complete Trip → Move to Trips table including date + time
   const handleComplete = async (order) => {
     const fuel = Number(expenses[order.id]?.fuel || 0);
     const toll = Number(expenses[order.id]?.toll || 0);
@@ -79,16 +73,11 @@ const OrdersPage = () => {
       return;
     }
 
-    if ([fuel, toll, driverSalary, other, kms].some((v) => isNaN(v))) {
-      alert("Please fill all expense fields correctly");
-      return;
-    }
-
     const totalExpense = fuel + toll + driverSalary + other;
     const netProfit = Number(order.total_amount || 0) - totalExpense;
 
     const tripData = {
-      vehicle_id: order.vehicle_id, // use vehicle_id
+      vehicle_id: order.vehicle_id,
       driver: order.driver,
       customer_name: order.customer_name,
       customer_number: order.customer_number,
@@ -107,108 +96,45 @@ const OrdersPage = () => {
       net_profit: netProfit,
     };
 
-    // 1️⃣ Insert trip
-    const { error: insertError } = await supabase
-      .from("trips")
-      .insert([tripData]);
-    if (insertError) {
-      console.error(insertError);
-      alert("Failed to complete trip: " + insertError.message);
-      return;
-    }
+    await supabase.from("trips").insert([tripData]);
+    await supabase.from("orders").delete().eq("id", order.id);
 
-    // 2️⃣ Fetch vehicle odometer
-    const { data: vehicleData, error: vehicleFetchError } = await supabase
-      .from("vehicles")
-      .select("odometer")
-      .eq("id", order.vehicle_id)
-      .single();
+    alert("Trip completed ✅");
 
-    if (vehicleFetchError) {
-      console.error(vehicleFetchError);
-      alert("Trip saved but failed to fetch vehicle odometer");
-      return;
-    }
-
-    const updatedOdometer = Number(vehicleData.odometer || 0) + kms;
-
-    // 3️⃣ Update vehicle odometer
-    const { error: updateError } = await supabase
-      .from("vehicles")
-      .update({ odometer: updatedOdometer })
-      .eq("id", order.vehicle_id);
-
-    if (updateError) {
-      console.error(updateError);
-      alert("Trip saved but failed to update odometer");
-      return;
-    }
-
-    // 4️⃣ Delete order
-    const { error: deleteError } = await supabase
-      .from("orders")
-      .delete()
-      .eq("id", order.id);
-
-    if (deleteError) {
-      console.error(deleteError);
-      alert("Failed to remove order from pending");
-      return;
-    }
-
-    alert("Trip completed successfully ✅");
-
-    setPayment((prev) => ({ ...prev, [order.id]: "" }));
-    setExpenses((prev) => ({ ...prev, [order.id]: {} }));
     setExpandedId(null);
     fetchOrders();
   };
 
-  const handleDelete = async (orderId) => {
-    const confirmDelete = window.confirm(
-      "Are you sure you want to delete this order?",
-    );
-    if (!confirmDelete) return;
-
-    const { error } = await supabase.from("orders").delete().eq("id", orderId);
-
-    if (error) {
-      console.error(error);
-      alert("Failed to delete order");
-      return;
-    }
-
-    alert("Order deleted successfully ✅");
+  const handleDelete = async (id) => {
+    if (!window.confirm("Delete this order?")) return;
+    await supabase.from("orders").delete().eq("id", id);
     fetchOrders();
   };
 
   return (
     <div className="px-3 py-4 sm:p-6 max-w-4xl mx-auto">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
-        <h2 className="flex justify-between text-xl sm:text-2xl font-bold text-gray-800">
-          Pending Orders
-          <span className="font-bold text-red-600">
-            ₹{totalPending.toLocaleString()}
-          </span>
-        </h2>
-        <select
-          value={selectedVehicle}
-          onChange={(e) => setSelectedVehicle(e.target.value)}
-          className="px-3 py-3 border rounded-lg text-sm bg-white"
-        >
-          {vehicles.map((v) => (
-            <option key={v} value={v}>
-              {v === "all" ? "All Vehicles" : vehicleMap[v]}
-            </option>
-          ))}
-        </select>
-      </div>
+      <div className="flex justify-between mb-4">
+        
+          <h2 className="text-xl font-semibold text-gray-800">
+            Pending
+            <span className="text-red-500 ml-1 text-xl font-medium">
+              ₹{totalPending.toLocaleString()}
+            </span>
+          </h2>
 
-      {filteredOrders.length === 0 && (
-        <p className="text-center text-gray-500 mt-10">
-          No pending orders found.
-        </p>
-      )}
+          <select
+            value={selectedVehicle}
+            onChange={(e) => setSelectedVehicle(e.target.value)}
+            className="border border-gray-200 text-xs px-2 py-1 rounded-md bg-white focus:outline-none focus:ring-1 focus:ring-blue-400"
+          >
+            {vehicles.map((v) => (
+              <option key={v} value={v}>
+                {v === "all" ? "All" : vehicleMap[v]}
+              </option>
+            ))}
+          </select>
+         
+      </div>
 
       {filteredOrders.map((order) => {
         const fuel = expenses[order.id]?.fuel ?? "";
@@ -223,191 +149,178 @@ const OrdersPage = () => {
           Number(toll || 0) +
           Number(driverSalary || 0) +
           Number(other || 0);
-        const netProfit = Number(order.total_amount || 0) - totalExpense;
 
-        const allFieldsFilled =
-          fuel !== "" &&
-          toll !== "" &&
-          driverSalary !== "" &&
-          other !== "" &&
-          kms !== "" &&
-          payAmount !== "" &&
-          Number(payAmount) === Number(order.balance);
+        const netProfit = Number(order.total_amount || 0) - totalExpense;
 
         return (
           <div
             key={order.id}
-            className="bg-white rounded-xl shadow-sm border px-3 py-4 mb-4"
+            className="border border-gray-200 rounded-lg p-3 mb-3 bg-white shadow-sm hover:shadow-md transition"
           >
-            <div className="flex items-center justify-between flex-nowrap">
-              <div className="flex flex-col flex-1 min-w-0">
-                <p className="text-sm font-semibold truncate">
+            {/* Header */}
+            <div className="flex justify-between items-center">
+              <div>
+                <p className="text-sm font-semibold text-gray-800">
                   #{order.id} - {order.customer_name}
-                  {/* {order.vehicle_id && (
-                    <span className="text-xs text-gray-500 font-normal ml-2">
-                      ({vehicleMap[order.vehicle_id]})
-                    </span>
-                  )} */}
                 </p>
-                <p className="text-xs flex flex-col sm:text-sm text-gray-500 truncate">
-                  <span>
-                    {order.from_date
-                      ? new Date(order.from_date).toLocaleDateString()
-                      : ""}{" "}
-                    {order.from_time || ""}
-                  </span>
-                  <span>
-                    {order.to_date
-                      ? new Date(order.to_date).toLocaleDateString()
-                      : ""}{" "}
-                    {order.to_time || ""}
-                  </span>
+                <p className="text-[11px] text-gray-400">
+                  {vehicleMap[order.vehicle_id]}
                 </p>
               </div>
-              {/* <div className="flex items-center gap-2 shrink-0">
-                <span className="bg-red-100 text-red-600 px-2 py-1 rounded-full text-xs font-semibold">
+
+              <div className="flex items-center gap-2">
+                <span className="bg-red-50 text-red-600 px-2 py-[2px] text-[11px] rounded">
                   ₹{order.balance}
                 </span>
+
                 <button
                   onClick={() =>
                     setExpandedId(expandedId === order.id ? null : order.id)
                   }
-                  className="text-xs sm:text-sm text-blue-600 font-medium"
+                  className="text-xs text-blue-600 hover:underline"
                 >
                   {expandedId === order.id ? "Hide" : "Manage"}
                 </button>
+
                 <button
                   onClick={() => handleDelete(order.id)}
-                  className="text-xs sm:text-sm text-red-600 font-medium"
+                  className="text-gray-400 hover:text-red-500"
                 >
-                  <AiOutlineDelete size={18} />
+                  <AiOutlineDelete size={16} />
                 </button>
-              </div> */}
-
-              <div className="flex flex-col items-end gap-1 shrink-0">
-                {order.vehicle_id && (
-                  <span className="text-xs text-gray-500 font-normal text-right">
-                    {vehicleMap[order.vehicle_id]}
-                  </span>
-                )}
-
-                <div className="flex items-center gap-2">
-                  <span className="bg-red-100 text-red-600 px-2 py-1 rounded-full text-xs font-semibold">
-                    ₹{order.balance}
-                  </span>
-
-                  <button
-                    onClick={() =>
-                      setExpandedId(expandedId === order.id ? null : order.id)
-                    }
-                    className="text-xs sm:text-sm text-blue-600 font-medium"
-                  >
-                    {expandedId === order.id ? "Hide" : "Manage"}
-                  </button>
-
-                  <button
-                    onClick={() => handleDelete(order.id)}
-                    className="text-xs sm:text-sm text-red-600 font-medium"
-                  >
-                    <AiOutlineDelete size={18} />
-                  </button>
-                </div>
               </div>
             </div>
 
+            {/* Expanded Section */}
             {expandedId === order.id && (
-              <div className="mt-4 border-t pt-3 space-y-3 text-sm">
+              <div className="mt-3 border-t pt-3 space-y-3 text-xs">
+                {/* Route */}
+                <div className="bg-gray-50 px-2 py-2 rounded">
+                  <p className="text-gray-400 text-[10px] mb-1">Route</p>
+                  <div className="flex justify-between font-medium text-gray-700">
+                    <span className="truncate">
+                      {order.destination_from || "-"}
+                    </span>
+                    <span className="mx-1 text-gray-400">→</span>
+                    <span className="truncate text-right">
+                      {order.destination_to || "-"}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Time */}
+                <div className="bg-gray-50 px-2 py-2 rounded">
+                  <p className="text-gray-400 text-[10px] mb-1">Trip</p>
+                  <div className="flex justify-between font-medium text-gray-700">
+                    <span>
+                      {order.from_date
+                        ? new Date(order.from_date).toLocaleDateString()
+                        : ""}{" "}
+                      {order.from_time || ""}
+                    </span>
+                    <span className="mx-1 text-gray-400">→</span>
+                    <span className="text-right">
+                      {order.to_date
+                        ? new Date(order.to_date).toLocaleDateString()
+                        : ""}{" "}
+                      {order.to_time || ""}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Summary */}
+                <div className="grid grid-cols-3 gap-2 bg-gray-50 p-2 rounded text-center">
+                  <div>
+                    <p className="text-gray-400 text-[10px]">Total</p>
+                    <p className="font-semibold text-gray-800">
+                      ₹{order.total_amount}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-gray-400 text-[10px]">Adv</p>
+                    <p className="font-semibold text-gray-800">
+                      ₹{order.advance}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-gray-400 text-[10px]">Due</p>
+                    <p className="font-semibold text-red-500">
+                      ₹{order.balance}
+                    </p>
+                  </div>
+                </div>
+                {/* Calculation */}
+                <div className="flex justify-between bg-gray-100 px-2 py-2 rounded text-xs">
+                  <span>
+                    Trip Exp: <strong>₹{totalExpense}</strong>
+                  </span>
+                  <span
+                    className={`font-semibold ${
+                      netProfit >= 0 ? "text-green-600" : "text-red-500"
+                    }`}
+                  >
+                    Profit ₹{netProfit}
+                  </span>
+                </div>
+
+                {/* KM */}
                 <input
                   type="number"
-                  placeholder="Total KMs"
-                  className="w-full sm:w-40 px-3 py-1.5 border rounded-lg text-sm"
+                  placeholder="KMs"
                   value={kms}
                   onChange={(e) =>
                     handleExpenseChange(order.id, "kms", e.target.value)
                   }
+                  className="w-full border border-gray-200 px-2 py-1.5 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-400"
                 />
+
+                {/* Expenses */}
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                  <input
-                    type="number"
-                    placeholder="Fuel"
-                    value={fuel}
-                    className="px-2 py-1.5 border rounded-lg text-sm"
-                    onChange={(e) =>
-                      handleExpenseChange(order.id, "fuel", e.target.value)
-                    }
-                  />
-                  <input
-                    type="number"
-                    placeholder="Toll"
-                    value={toll}
-                    className="px-2 py-1.5 border rounded-lg text-sm"
-                    onChange={(e) =>
-                      handleExpenseChange(order.id, "toll", e.target.value)
-                    }
-                  />
-                  <input
-                    type="number"
-                    placeholder="Driver Salary"
-                    value={driverSalary}
-                    className="px-2 py-1.5 border rounded-lg text-sm"
-                    onChange={(e) =>
-                      handleExpenseChange(
-                        order.id,
-                        "driverSalary",
-                        e.target.value,
-                      )
-                    }
-                  />
-                  <input
-                    type="number"
-                    placeholder="Other"
-                    value={other}
-                    className="px-2 py-1.5 border rounded-lg text-sm"
-                    onChange={(e) =>
-                      handleExpenseChange(order.id, "other", e.target.value)
-                    }
-                  />
+                  {[
+                    { key: "fuel", value: fuel, placeholder: "Fuel" },
+                    { key: "toll", value: toll, placeholder: "Toll" },
+                    {
+                      key: "driverSalary",
+                      value: driverSalary,
+                      placeholder: "Driver",
+                    },
+                    { key: "other", value: other, placeholder: "Other" },
+                  ].map((item) => (
+                    <input
+                      key={item.key}
+                      type="number"
+                      placeholder={item.placeholder}
+                      value={item.value}
+                      onChange={(e) =>
+                        handleExpenseChange(order.id, item.key, e.target.value)
+                      }
+                      className="border border-gray-200 px-2 py-1.5 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-400"
+                    />
+                  ))}
                 </div>
 
-                <div className="flex justify-between bg-gray-50 px-3 py-2 rounded-lg text-xs">
-                  <span>
-                    Expense: <strong>₹{totalExpense}</strong>
-                  </span>
-                  <span
-                    className={`${netProfit >= 0 ? "text-green-600" : "text-red-600"} font-semibold`}
-                  >
-                    Profit: ₹{netProfit}
-                  </span>
-                </div>
-
-                <div className="flex gap-2 items-center">
+                {/* Payment */}
+                <div className="flex gap-2">
                   <input
                     type="number"
-                    placeholder={`₹${order.balance}`}
+                    placeholder={`Due ₹${order.balance}`}
                     value={payAmount}
-                    className="flex-1 px-3 py-1.5 border rounded-lg text-sm"
                     onChange={(e) =>
                       setPayment((prev) => ({
                         ...prev,
                         [order.id]: e.target.value,
                       }))
                     }
+                    className="flex-1 border border-gray-200 px-2 py-1.5 rounded text-xs focus:outline-none focus:ring-1 focus:ring-green-400"
                   />
+
                   <button
-                    disabled={!allFieldsFilled}
                     onClick={() => handleComplete(order)}
-                    className={`px-4 py-1.5 rounded-lg text-sm font-semibold transition
-                      ${allFieldsFilled ? "bg-green-600 text-white" : "bg-gray-300 text-gray-500 cursor-not-allowed"}`}
+                    className="bg-green-600 hover:bg-green-700 text-white px-3 rounded text-xs"
                   >
-                    Complete
+                    Done
                   </button>
                 </div>
-
-                {!allFieldsFilled && (
-                  <p className="text-xs text-red-500">
-                    Fill all fields & exact payment
-                  </p>
-                )}
               </div>
             )}
           </div>
