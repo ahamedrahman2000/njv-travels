@@ -114,26 +114,24 @@ const OrdersPage = () => {
   return (
     <div className="px-3 py-4 sm:p-6 max-w-4xl mx-auto">
       <div className="flex justify-between mb-4">
-        
-          <h2 className="text-xl font-semibold text-gray-800">
-            Pending
-            <span className="text-red-500 ml-1 text-xl font-medium">
-              ₹{totalPending.toLocaleString()}
-            </span>
-          </h2>
+        <h2 className="text-xl font-semibold text-gray-800">
+          Pending
+          <span className="text-red-500 ml-1 text-xl font-medium">
+            ₹{totalPending.toLocaleString()}
+          </span>
+        </h2>
 
-          <select
-            value={selectedVehicle}
-            onChange={(e) => setSelectedVehicle(e.target.value)}
-            className="border border-gray-200 text-xs px-2 py-1 rounded-md bg-white focus:outline-none focus:ring-1 focus:ring-blue-400"
-          >
-            {vehicles.map((v) => (
-              <option key={v} value={v}>
-                {v === "all" ? "All" : vehicleMap[v]}
-              </option>
-            ))}
-          </select>
-         
+        <select
+          value={selectedVehicle}
+          onChange={(e) => setSelectedVehicle(e.target.value)}
+          className="border border-gray-200 text-xs px-2 py-1 rounded-md bg-white focus:outline-none focus:ring-1 focus:ring-blue-400"
+        >
+          {vehicles.map((v) => (
+            <option key={v} value={v}>
+              {v === "all" ? "All" : vehicleMap[v]}
+            </option>
+          ))}
+        </select>
       </div>
 
       {filteredOrders.map((order) => {
@@ -161,10 +159,25 @@ const OrdersPage = () => {
             <div className="flex justify-between items-center">
               <div>
                 <p className="text-sm font-semibold text-gray-800">
-                  #{order.id} - {order.customer_name}
+                  {order.customer_name}
                 </p>
                 <p className="text-[11px] text-gray-400">
                   {vehicleMap[order.vehicle_id]}
+                </p>
+                <p className="text-[10px]">
+                  <span className="text-blue-700">
+                    {order.from_date
+                      ? new Date(order.from_date).toLocaleDateString()
+                      : ""}
+                  </span>{" "}
+                  <span className="text-gray-500">{order.from_time || ""}</span>
+                  {" → "}
+                  <span className="text-blue-700">
+                    {order.to_date
+                      ? new Date(order.to_date).toLocaleDateString()
+                      : ""}
+                  </span>{" "}
+                  <span className="text-gray-500">{order.to_time || ""}</span>
                 </p>
               </div>
 
@@ -184,9 +197,9 @@ const OrdersPage = () => {
 
                 <button
                   onClick={() => handleDelete(order.id)}
-                  className="text-gray-400 hover:text-red-500"
+                  className="text-red-700 hover:text-red-500"
                 >
-                  <AiOutlineDelete size={16} />
+                  <AiOutlineDelete size={18} />
                 </button>
               </div>
             </div>
@@ -204,26 +217,6 @@ const OrdersPage = () => {
                     <span className="mx-1 text-gray-400">→</span>
                     <span className="truncate text-right">
                       {order.destination_to || "-"}
-                    </span>
-                  </div>
-                </div>
-
-                {/* Time */}
-                <div className="bg-gray-50 px-2 py-2 rounded">
-                  <p className="text-gray-400 text-[10px] mb-1">Trip</p>
-                  <div className="flex justify-between font-medium text-gray-700">
-                    <span>
-                      {order.from_date
-                        ? new Date(order.from_date).toLocaleDateString()
-                        : ""}{" "}
-                      {order.from_time || ""}
-                    </span>
-                    <span className="mx-1 text-gray-400">→</span>
-                    <span className="text-right">
-                      {order.to_date
-                        ? new Date(order.to_date).toLocaleDateString()
-                        : ""}{" "}
-                      {order.to_time || ""}
                     </span>
                   </div>
                 </div>
