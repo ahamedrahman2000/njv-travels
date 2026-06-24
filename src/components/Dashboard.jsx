@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { supabase } from "../supabaseClient";
 import { useNavigate } from "react-router-dom";
-import { Car, ClipboardList, Truck, Users } from "lucide-react";
+import { Car, ClipboardList, Truck, Users, MessageSquare } from "lucide-react";
 
 const DashboardPage = () => {
   const navigate = useNavigate();
@@ -10,6 +10,7 @@ const DashboardPage = () => {
   const [pendingOrders, setPendingOrders] = useState(0);
   const [totalVehicles, setTotalVehicles] = useState(0);
   const [totalDrivers, setTotalDrivers] = useState(0);
+  const [showEnquiryPopup, setShowEnquiryPopup] = useState(false);
 
   useEffect(() => {
     fetchDashboardData();
@@ -57,6 +58,23 @@ const DashboardPage = () => {
     </div>
   );
 
+  // New enquiry card render function with popup
+  const renderEnquiryCard = () => (
+    <div
+      onClick={() => setShowEnquiryPopup(true)}
+      className="bg-purple-500 cursor-pointer text-white rounded-2xl p-5 shadow-md hover:scale-105 transition duration-200 flex items-center justify-between"
+    >
+      <div>
+        <p className="text-sm opacity-80">Enquiry</p>
+        <p className="text-1xl font-bold mt-1">Click</p>
+      </div>
+
+      <div className="bg-white/20 p-3 rounded-xl">
+        <MessageSquare size={26} />
+      </div>
+    </div>
+  );
+
   return (
     <div className="min-h-screen bg-gray-100 px-4 py-8">
       <div className="max-w-6xl mx-auto">
@@ -87,8 +105,36 @@ const DashboardPage = () => {
             Users,
             "/driversPage",
           )}
+          
+          {/* New Enquiry Card - Add this line */}
+          {renderEnquiryCard()}
         </div>
       </div>
+
+      {/* Enquiry Popup */}
+      {showEnquiryPopup && (
+        <div className="fixed inset-0 flex items-center justify-center z-50 bg-black/50 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl p-8 max-w-sm w-full mx-4 shadow-2xl transform transition-all">
+            <div className="text-center">
+              <div className="mx-auto w-16 h-16 bg-purple-100 rounded-full flex items-center justify-center mb-4">
+                <MessageSquare className="w-8 h-8 text-purple-600" />
+              </div>
+              <h3 className="text-2xl font-bold text-gray-800 mb-2">
+                Hey Vajid Bhaiiii! 👋
+              </h3>
+              <p className="text-gray-600 text-lg">
+                Working on it 😢
+              </p>
+              <button
+                onClick={() => setShowEnquiryPopup(false)}
+                className="mt-6 px-6 py-2 bg-purple-500 hover:bg-purple-600 text-white rounded-lg font-medium transition duration-200"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
