@@ -1,9 +1,14 @@
-import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
+import {
+  BrowserRouter as Router,
+  Routes,
+  Route,
+  Navigate,
+} from "react-router-dom";
 import { useEffect, useState } from "react";
 import { supabase } from "./supabaseClient";
 
 import Dashboard from "./components/Dashboard";
-import BookingForm from "./components/BookingForm"; 
+import BookingForm from "./components/BookingForm";
 import TripsPage from "./components/TripsPage";
 import OrdersPage from "./components/OrdersPage";
 import BottomNav from "./components/BottomNav";
@@ -17,6 +22,8 @@ import ForgotPassword from "./components/ForgetPassword";
 import UpdatePassword from "./components/UpdatePassword";
 import VehicleListPage from "./components/VehicleListPage";
 import VehicleMaintenancePage from "./components/VehicleMaintenancePage";
+import EnquiryPage from "./components/EnquiryPage";
+import ExportPDF from "./components/ExportPDF";
 
 function App() {
   const [session, setSession] = useState(null);
@@ -34,7 +41,7 @@ function App() {
     const { data: listener } = supabase.auth.onAuthStateChange(
       (_event, session) => {
         setSession(session);
-      }
+      },
     );
 
     return () => listener.subscription.unsubscribe();
@@ -81,7 +88,6 @@ function App() {
               </ProtectedRoute>
             }
           />
- 
 
           <Route
             path="/trips"
@@ -143,7 +149,24 @@ function App() {
               </ProtectedRoute>
             }
           />
-  
+
+          <Route
+            path="/enquiry"
+            element={
+              <ProtectedRoute>
+                <EnquiryPage />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/export"
+            element={
+              <ProtectedRoute>
+                <ExportPDF />
+              </ProtectedRoute>
+            }
+          />
           <Route path="/forgot-password" element={<ForgotPassword />} />
           <Route path="/update-password" element={<UpdatePassword />} />
 

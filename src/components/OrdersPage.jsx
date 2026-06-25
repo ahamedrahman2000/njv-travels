@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { supabase } from "../supabaseClient";
 import { AiOutlineDelete } from "react-icons/ai";
+import { Edit, Save, X } from "lucide-react";
 
 const OrdersPage = () => {
   const [orders, setOrders] = useState([]);
@@ -9,6 +10,8 @@ const OrdersPage = () => {
   const [expandedId, setExpandedId] = useState(null);
   const [selectedVehicle, setSelectedVehicle] = useState("all");
   const [vehicleMap, setVehicleMap] = useState({});
+  const [editingOrderId, setEditingOrderId] = useState(null);
+  const [editData, setEditData] = useState({});
 
   useEffect(() => {
     const fetchVehicles = async () => {
@@ -37,6 +40,16 @@ const OrdersPage = () => {
   useEffect(() => {
     fetchOrders();
   }, []);
+
+  // Convert 24hr to 12hr format
+  const convertTo12Hour = (time) => {
+    if (!time) return "";
+    const [hours, minutes] = time.split(':');
+    const hour = parseInt(hours);
+    const ampm = hour >= 12 ? 'PM' : 'AM';
+    const hour12 = hour % 12 || 12;
+    return `${hour12}:${minutes} ${ampm}`;
+  };
 
   const vehicles = useMemo(
     () => ["all", ...new Set(orders.map((o) => o.vehicle_id).filter(Boolean))],
@@ -111,9 +124,251 @@ const OrdersPage = () => {
     fetchOrders();
   };
 
+  // Start editing an order
+  const handleEditClick = (order) => {
+    setEditingOrderId(order.id);
+    setEditData({
+      customer_name: order.customer_name || "",
+      customer_number: order.customer_number || "",
+      driver: order.driver || "",
+      from_date: order.from_date || "",
+      from_time: order.from_time || "",
+      to_date: order.to_date || "",
+      to_time: order.to_time || "",
+      destination_from: order.destination_from || "",
+      destination_to: order.destination_to || "",
+      total_amount: order.total_amount || "",
+      advance: order.advance || "",
+    });
+  };
+
+  // Cancel editing
+  const handleCancelEdit = () => {
+    setEditingOrderId(null);
+    setEditData({});
+  };
+
+  // Save edited order
+  const handleSaveEdit = async (orderId) => {
+    try {
+      const { error } = await supabase
+        .from("orders")
+        .update({
+          customer_name: editData.customer_name,
+          customer_number: editData.customer_number,
+          driver: editData.driver,
+          from_date: editData.from_date,
+          from_time: editData.from_time,
+          to_date: editData.to_date,
+          to_time: editData.to_time,
+          destination_from: editData.destination_from,
+          destination_to: editData.destination_to,
+          total_amount: parseFloat(editData.total_amount) || 0,
+          advance: parseFloat(editData.advance) || 0,
+          balance: (parseFloat(editData.total_amount) || 0) - (parseFloat(editData.advance) || 0),
+        })
+        .eq("id", orderId);
+
+      if (error) throw error;
+
+      alert("Order updated successfully!");
+      setEditingOrderId(null);
+      setEditData({});
+      fetchOrders();
+    } catch (error) {
+      console.error("Error updating order:", error);
+      alert("Error updating order. Please try again.");
+    }
+  };
+
+  // Render edit form for an order
+  const renderEditForm = (order) => {
+    return (
+      <div className="mt-3 border-t pt-3 space-y-3">
+        <div className="flex justify-between items-center mb-2">
+          <h4 className="text-sm font-semibold text-gray-700">Edit Order</h4>
+          <div className="flex gap-2">
+            <button
+              onClick={() => handleSaveEdit(order.id)}
+              className="bg-green-500 hover:bg-green-600 text-white px-3 py-1 rounded text-xs flex items-center gap-1"
+            >
+              <Save size={14} />
+              Save
+            </button>
+            <button
+              onClick={handleCancelEdit}
+              className="bg-gray-500 hover:bg-gray-600 text-white px-3 py-1 rounded text-xs flex items-center gap-1"
+            >
+              <X size={14} />
+              Cancel
+            </button>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-2">
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">
+              Customer Name
+            </label>
+            <input
+              type="text"
+              value={editData.customer_name}
+              onChange={(e) =>
+                setEditData({ ...editData, customer_name: e.target.value })
+              }
+              className="w-full p-1.5 text-xs border border-gray-300 rounded focus:ring-1 focus:ring-blue-400 outline-none"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">
+              Customer Mobile
+            </label>
+            <input
+              type="text"
+              value={editData.customer_number}
+              onChange={(e) =>
+                setEditData({ ...editData, customer_number: e.target.value })
+              }
+              className="w-full p-1.5 text-xs border border-gray-300 rounded focus:ring-1 focus:ring-blue-400 outline-none"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">
+              Driver
+            </label>
+            <input
+              type="text"
+              value={editData.driver}
+              onChange={(e) =>
+                setEditData({ ...editData, driver: e.target.value })
+              }
+              className="w-full p-1.5 text-xs border border-gray-300 rounded focus:ring-1 focus:ring-blue-400 outline-none"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">
+              Total Amount
+            </label>
+            <input
+              type="number"
+              value={editData.total_amount}
+              onChange={(e) =>
+                setEditData({ ...editData, total_amount: e.target.value })
+              }
+              className="w-full p-1.5 text-xs border border-gray-300 rounded focus:ring-1 focus:ring-blue-400 outline-none"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">
+              Advance
+            </label>
+            <input
+              type="number"
+              value={editData.advance}
+              onChange={(e) =>
+                setEditData({ ...editData, advance: e.target.value })
+              }
+              className="w-full p-1.5 text-xs border border-gray-300 rounded focus:ring-1 focus:ring-blue-400 outline-none"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">
+              Balance
+            </label>
+            <input
+              type="number"
+              value={(parseFloat(editData.total_amount) || 0) - (parseFloat(editData.advance) || 0)}
+              readOnly
+              className="w-full p-1.5 text-xs border border-gray-300 rounded bg-gray-100 font-semibold text-red-600"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">
+              From Date
+            </label>
+            <input
+              type="date"
+              value={editData.from_date}
+              onChange={(e) =>
+                setEditData({ ...editData, from_date: e.target.value })
+              }
+              className="w-full p-1.5 text-xs border border-gray-300 rounded focus:ring-1 focus:ring-blue-400 outline-none"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">
+              From Time
+            </label>
+            <input
+              type="time"
+              value={editData.from_time}
+              onChange={(e) =>
+                setEditData({ ...editData, from_time: e.target.value })
+              }
+              className="w-full p-1.5 text-xs border border-gray-300 rounded focus:ring-1 focus:ring-blue-400 outline-none"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">
+              To Date
+            </label>
+            <input
+              type="date"
+              value={editData.to_date}
+              onChange={(e) =>
+                setEditData({ ...editData, to_date: e.target.value })
+              }
+              className="w-full p-1.5 text-xs border border-gray-300 rounded focus:ring-1 focus:ring-blue-400 outline-none"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">
+              To Time
+            </label>
+            <input
+              type="time"
+              value={editData.to_time}
+              onChange={(e) =>
+                setEditData({ ...editData, to_time: e.target.value })
+              }
+              className="w-full p-1.5 text-xs border border-gray-300 rounded focus:ring-1 focus:ring-blue-400 outline-none"
+            />
+          </div>
+          <div className="col-span-2">
+            <label className="block text-xs font-medium text-gray-600 mb-1">
+              Destination From
+            </label>
+            <input
+              type="text"
+              value={editData.destination_from}
+              onChange={(e) =>
+                setEditData({ ...editData, destination_from: e.target.value })
+              }
+              className="w-full p-1.5 text-xs border border-gray-300 rounded focus:ring-1 focus:ring-blue-400 outline-none"
+            />
+          </div>
+          <div className="col-span-2">
+            <label className="block text-xs font-medium text-gray-600 mb-1">
+              Destination To
+            </label>
+            <input
+              type="text"
+              value={editData.destination_to}
+              onChange={(e) =>
+                setEditData({ ...editData, destination_to: e.target.value })
+              }
+              className="w-full p-1.5 text-xs border border-gray-300 rounded focus:ring-1 focus:ring-blue-400 outline-none"
+            />
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="px-3 py-4 sm:p-6 max-w-4xl mx-auto">
-      <div className="flex justify-between mb-4">
+      {/* Header */}
+      <div className="flex justify-between items-center mb-4">
         <h2 className="text-xl font-semibold text-gray-800">
           Pending
           <span className="text-red-500 ml-1 text-xl font-medium">
@@ -141,6 +396,7 @@ const OrdersPage = () => {
         const other = expenses[order.id]?.other ?? "";
         const kms = expenses[order.id]?.kms ?? "";
         const payAmount = payment[order.id] ?? "";
+        const isEditing = editingOrderId === order.id;
 
         const totalExpense =
           Number(fuel || 0) +
@@ -170,14 +426,18 @@ const OrdersPage = () => {
                       ? new Date(order.from_date).toLocaleDateString()
                       : ""}
                   </span>{" "}
-                  <span className="text-gray-500">{order.from_time || ""}</span>
+                  <span className="text-gray-500">
+                    {order.from_time ? convertTo12Hour(order.from_time) : ""}
+                  </span>
                   {" → "}
                   <span className="text-blue-700">
                     {order.to_date
                       ? new Date(order.to_date).toLocaleDateString()
                       : ""}
                   </span>{" "}
-                  <span className="text-gray-500">{order.to_time || ""}</span>
+                  <span className="text-gray-500">
+                    {order.to_time ? convertTo12Hour(order.to_time) : ""}
+                  </span>
                 </p>
               </div>
 
@@ -186,26 +446,43 @@ const OrdersPage = () => {
                   ₹{order.balance}
                 </span>
 
-                <button
-                  onClick={() =>
-                    setExpandedId(expandedId === order.id ? null : order.id)
-                  }
-                  className="text-xs text-blue-600 hover:underline"
-                >
-                  {expandedId === order.id ? "Hide" : "Manage"}
-                </button>
+                {!isEditing && (
+                  <>
+                    <button
+                      onClick={() =>
+                        setExpandedId(expandedId === order.id ? null : order.id)
+                      }
+                      className="text-xs text-blue-600 hover:underline"
+                    >
+                      {expandedId === order.id ? "Hide" : "Manage"}
+                    </button>
 
-                <button
-                  onClick={() => handleDelete(order.id)}
-                  className="text-red-700 hover:text-red-500"
-                >
-                  <AiOutlineDelete size={18} />
-                </button>
+                    <button
+                      onClick={() => handleEditClick(order)}
+                      className="text-blue-600 hover:text-blue-800"
+                      title="Edit Order"
+                    >
+                      <Edit size={16} />
+                    </button>
+                  </>
+                )}
+
+                {!isEditing && (
+                  <button
+                    onClick={() => handleDelete(order.id)}
+                    className="text-red-700 hover:text-red-500"
+                  >
+                    <AiOutlineDelete size={18} />
+                  </button>
+                )}
               </div>
             </div>
 
+            {/* Edit Form */}
+            {isEditing && renderEditForm(order)}
+
             {/* Expanded Section */}
-            {expandedId === order.id && (
+            {expandedId === order.id && !isEditing && (
               <div className="mt-3 border-t pt-3 space-y-3 text-xs">
                 {/* Route */}
                 <div className="bg-gray-50 px-2 py-2 rounded">

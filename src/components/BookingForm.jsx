@@ -1,10 +1,9 @@
-import  { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { supabase } from "../supabaseClient";
 
 const BookingForm = () => {
-  // State for vehicles and drivers
+  // State for vehicles
   const [vehicles, setVehicles] = useState([]);
-  const [drivers, setDrivers] = useState([]);
   const [fromTime, setFromTime] = useState("");
   const [toTime, setToTime] = useState("");
 
@@ -25,35 +24,17 @@ const BookingForm = () => {
 
   const [loading, setLoading] = useState(false);
 
-  // Fetch vehicles and drivers
-  // useEffect(() => {
-  //   const fetchData = async () => {
-  //     const { data: vehicleData, error: vehicleError } = await supabase
-  //       .from("vehicles")
-  //       .select("vehicle_name");
-  //     if (!vehicleError) setVehicles(vehicleData || []);
-
-  //     const { data: driverData, error: driverError } = await supabase
-  //       .from("drivers")
-  //       .select("driver_name");
-  //     if (!driverError) setDrivers(driverData || []);
-  //   };
-  //   fetchData();
-  // }, []);
+  // Fetch vehicles only
   useEffect(() => {
     const fetchData = async () => {
       const { data: vehicleData, error: vehicleError } = await supabase
         .from("vehicles")
-        .select("id, vehicle_name"); // fetch id and name
+        .select("id, vehicle_name");
       if (!vehicleError) setVehicles(vehicleData || []);
-
-      const { data: driverData, error: driverError } = await supabase
-        .from("drivers")
-        .select("id, driver_name"); // fetch id if you have drivers table
-      if (!driverError) setDrivers(driverData || []);
     };
     fetchData();
   }, []);
+
   // Auto-calculate balance
   useEffect(() => {
     const total = parseFloat(totalAmount) || 0;
@@ -85,7 +66,7 @@ const BookingForm = () => {
     setLoading(true);
 
     // Combine date + time properly
-    const fromDateTime = `${fromDate}T${fromTime}`; // ISO format YYYY-MM-DDTHH:MM
+    const fromDateTime = `${fromDate}T${fromTime}`;
     const toDateTime = `${toDate}T${toTime}`;
 
     const { error } = await supabase.from("orders").insert([
@@ -93,16 +74,16 @@ const BookingForm = () => {
         customer_name: customerName,
         customer_number: customerNumber,
         vehicle_id: parseInt(vehicle),
-        driver,
-        from_date: fromDateTime, // store timestamp
-        to_date: toDateTime, // store timestamp
+        driver: driver, // Manual driver entry
+        from_date: fromDateTime,
+        to_date: toDateTime,
         destination_from: destinationFrom,
         destination_to: destinationTo,
         total_amount: parseFloat(totalAmount),
         advance: parseFloat(advance),
         balance: parseFloat(balance),
-        from_time: fromTime, // optional separate time field
-        to_time: toTime, // optional separate time field
+        from_time: fromTime,
+        to_time: toTime,
       },
     ]);
 
@@ -187,20 +168,15 @@ const BookingForm = () => {
 
           <div>
             <label className="block mb-1 font-medium text-gray-600">
-              Select Driver *
+              Driver Name *
             </label>
-            <select
+            <input
+              type="text"
               value={driver}
               onChange={(e) => setDriver(e.target.value)}
+              placeholder="Enter driver name"
               className="w-full p-2 text-sm border border-gray-300 rounded-lg focus:ring-1 focus:ring-[#D4AF37]"
-            >
-              <option value="">Select Driver</option>
-              {drivers.map((d) => (
-                <option key={d.driver_name} value={d.driver_name}>
-                  {d.driver_name}
-                </option>
-              ))}
-            </select>
+            />
           </div>
         </div>
 
@@ -299,11 +275,10 @@ const BookingForm = () => {
         </div>
 
         {/* Buttons */}
-
         <button
           onClick={handleSave}
           disabled={loading}
-          className="bg-green-500 w-full text-white px-6 py-2 rounded font-semibold"
+          className="bg-green-500 w-full text-white px-6 py-2 rounded font-semibold hover:bg-green-600 transition disabled:opacity-50"
         >
           {loading ? "Saving..." : "Save"}
         </button>
